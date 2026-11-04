@@ -1,7 +1,7 @@
-probe_seat 2026-11-04 16:50:21 KST
+probe_seat 2026-11-04 16:53:50 KST
 date 20261104
 
-목록 200 len=34688
+목록 200 len=30197
 회차 screenPlanId=1109718 playNumber=5
 
 /Popup/SeatChoiceSeatMap -> 200 len=23009
@@ -16,5 +16,25 @@ date 20261104
   표시    : 장애, 우대, 커플, disabled, handicap, 선택, 예매
   호출    : /Popup/SeatChoiceConfirm, /Popup/SeatChoiceSeatMap, /popup/AddSeatGrap, /popup/RemoveAllSeatGrap, /popup/RemoveSeatGrap
   좌석수  : normal=1, reserved=1, selected=1, disabled=1, accessible=1, couple=1
-  샘플    : <span class="normal"></span></li><li><span class="reserved"></span></li><li><span class="disabled"></span></li><li><span class="accessible"></span></li><li><span class="couple"></span></li></ul></div><div class="map big seatmap"></div></d
+  좌석요소: < seatCount) {
+                            $(this).prop("checked", false);
+                    alert("선택한 인원수보다 좌석을 많이 선택하셨습니다.");
+                    return false;
+                }
+                url = "/popup/AddSeatGrap";
+            } else {
+                url = "/popup/RemoveSeatGrap"
+                    }
+                    $.ajax({
+            url: url,
+                        dataType: "json",
+                        data: {
+                    "screenPlanId": $.desktop.reserveData.screenPlanId,
+                            "seatMapId": seatMapId
+                     
+  seatgroup 값:  + group + (7)
+  script  : reSelected()) { return; } var arrSeatMapId = new Array(); $("div.seatmap input.choose-seat.accessible:checked, div.seatmap input.choose-seat_large.accessible:checked", "di
+  script  : p("checked", false).removeProp("checked"); }); if (arrSeatMapId.length == 0) { $.desktop.seatchoicepop.viewSelectedSeat(); $.desktop.seatchoicepop.hideSelectSeat(); 
+  script  :  "screenPlanId": $.desktop.reserveData.screenPlanId, "seatMapId": arrSeatMapId.toString() }, method: "POST", success: function (result) { 
+  script  : atmap", "div.seatChoice").on("click", "input.choose-seat", function () { var seatMapId = $(this).data("seatmapid"); var url = ""; if ($(this).hasClass("disabled") == true) { $(this)
 
