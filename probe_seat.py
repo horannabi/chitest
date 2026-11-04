@@ -36,7 +36,10 @@ MARKERS = ("장애", "휠체어", "우대", "커플", "노약", "임산",
            "disabled", "wheel", "handicap", "special", "sold", "매진",
            "선택", "예매", "available", "occupied")
 
-PATHS = ["/Popup/Seatchoice", "/Popup/Reserve"]
+PATHS = ["/Popup/SeatChoiceSeatMap", "/Popup/Seatchoice"]
+
+# 좌석 배치도에서 좌석 상태/종류를 나타내는 클래스들
+SEAT_CLASSES = ("normal", "reserved", "selected", "disabled", "accessible", "couple")
 
 
 class LegacyTLSAdapter(HTTPAdapter):
@@ -84,11 +87,19 @@ def summarize(body):
     calls |= set(re.findall(r'["\'](/[A-Za-z]+/[A-Za-z][A-Za-z0-9_]*)["\']', body))
     out.append("  호출    : " + (", ".join(sorted(calls)[:20]) if calls else "(없음)"))
 
-    # 좌석 영역 구조 샘플 (내용은 지우고 태그 골격만)
-    m = re.search(r'<[^>]*class="[^"]*wrap-seats[^"]*"[^>]*>(.{0,1500})', body, re.S)
+    # 좌석 상태/종류별 개수. 이 숫자로 빈자리 판정이 되는지 바로 보인다.
+    tally = {k: sum(1 for grp in classes.elements() if grp == k) for k in SEAT_CLASSES}
+    if any(tally.values()):
+        out.append("  좌석수  : " + ", ".join("%s=%d" % (k, v) for k, v in tally.items()))
+
+    # 좌석 요소 샘플 (내용은 지우고 태그 골격만)
+    m = re.search(r'(<[^>]*class="[^"]*\b(?:normal|reserved|accessible)\b[^"]*"[^>]*>.{0,400})',
+                  body, re.S)
+    if not m:
+        m = re.search(r'<[^>]*class="[^"]*wrap-seats[^"]*"[^>]*>(.{0,1200})', body, re.S)
     if m:
         skel = re.sub(r'>[^<]{1,200}<', '><', m.group(1))
-        out.append("  좌석영역: " + re.sub(r'\s+', ' ', skel)[:700])
+        out.append("  샘플    : " + re.sub(r'\s+', ' ', skel)[:700])
     return out
 
 
