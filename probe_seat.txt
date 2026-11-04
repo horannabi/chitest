@@ -1,0 +1,16 @@
+probe_seat 2026-11-04 16:40:32 KST
+date 20261104
+
+목록 200 len=31397
+회차 screenPlanId=1109718 playNumber=5
+
+/Popup/Seatchoice -> 200 len=39271
+  class  : input-seat-block(10), input-seat(4), input-radio(4), input-indicator(4), kind(3), input-select(3), title(2), popup(1), seatChoice(1), section-pop-top(1), btn-rsv-reset(1), section-pop-movie(1), poster(1), rate-x(1), table-movie-info(1), time(1), number(1), seats(1), total-price(1), section-pop-theater(1), wrap-number-info(1), id_2780(1), id_2834(1), id_4683(1), wrap-seats(1)
+  data-* : data-seatgroup(7), data-rowname(7), data-seatmapid(5), data-colnumber(5), data-salepriceid(3), data-price(3), data-salepricename(3), data-salepricecode(3), data-playdate(2), data-screenplanid(2), data-theatercode(1), data-moviecode(1)
+  표시    : 장애, 우대, 커플, disabled, handicap, 선택, 예매
+
+/Popup/Reserve -> 200 len=21304
+  class  : theater(9), title(4), wrap-theater(2), desc-box(2), ready(2), popup(1), section-pop-top(1), btn-rsv-reset(1), section-pop-left(1), wrap-date(1), btn-show-cal(1), input-cal(1), cal-week(1), theater-box(1), wrap-movielist(1), section-pop-right(1), wrap-timetable-head(1), d7(1), d5(1), d8(1), d11(1), d9(1), d14(1), d4(1), d12(1)
+  data-* : data-theatercode(12), data-screenplanid(3), data-moviecode(2), data-playdate(2), data-playnumber(2), data-date(1)
+  표시    : disabled, 선택, 예매
+
