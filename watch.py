@@ -428,18 +428,32 @@ def interval_for(cfg, now):
 
 # ---------------------------------------------------------------- main
 
-def snapshot(cfg, fetcher, target):
-    """지금 목록을 한 번 조회해서 사람이 읽을 문자열로 돌려준다. (/now 용)"""
+def snapshot(cfg, fetcher, target, show_all=False):
+    """
+    지금 목록을 한 번 조회해서 사람이 읽을 문자열로 돌려준다.
+    show_all=False 면 키워드와 일치하는 것만 보여준다. (/now)
+    show_all=True  면 그날 전체를 보여준다.              (/nowall)
+    """
     if target is None:
         return "지정된 날짜가 없습니다. /watch 20261107 처럼 지정하세요."
     body, fmt = fetcher.fetch(target)
     if body is None:
         return "조회에 실패했습니다. 잠시 후 다시 시도하세요."
+
     items = parse(body, fmt)
-    head = "날짜 %s / 항목 %d개" % (target.strftime("%Y%m%d"), len(items))
-    if not items:
-        return head + "\n아직 목록이 올라오지 않았습니다."
-    return "\n".join([head, ""] + format_items(items))
+    ymd = target.strftime("%Y%m%d")
+
+    if show_all:
+        head = "날짜 %s / 전체 %d개" % (ymd, len(items))
+        if not items:
+            return head + "\n아직 목록이 올라오지 않았습니다."
+        return "\n".join([head, ""] + format_items(items))
+
+    hits = match_keywords(items, cfg.keywords)
+    if not hits:
+        return ("날짜 %s\n아직 없습니다. (그날 전체 %d개)\n전체를 보려면 /nowall"
+                % (ymd, len(items)))
+    return "\n".join(["날짜 %s / %d건" % (ymd, len(hits)), ""] + format_items(hits))
 
 
 def main():
@@ -484,8 +498,9 @@ def main():
                 state.save("offset")
                 continue
             log("명령 수신")
-            changed = handle_command(text, state, tg, status_text,
-                                     lambda: snapshot(cfg, fetcher, state.target))
+            changed = handle_command(
+                text, state, tg, status_text,
+                lambda d, allitems=False: snapshot(cfg, fetcher, d, allitems))
             if changed:
                 last_count = None
                 last_reason = None
@@ -529,6 +544,16 @@ def main():
             state.target = None              # 알렸으면 감시 종료
             state.save("done")
             return 0
+
+        # trace 가 켜져 있으면 못 찾았을 때도 매 조회마다 한 줄씩 보고한다
+        if state.trace_on():
+            tg.send("[trace] %s · %d회 · 없음 (전체 %d개) · %s"
+                    % (datetime.now(KST).strftime("%H:%M:%S"), checks, len(items),
+                       "우회" if fetcher.use_proxy else "직접"))
+        elif state.trace_until is not None:
+            state.trace_until = None
+            state.save("trace expired")
+            tg.send("trace 시간이 끝나 종료했습니다. 감시는 계속됩니다.")
 
         # 목록 개수가 바뀌면 로그에 남겨 추적할 수 있게 한다
         if len(items) != last_count:

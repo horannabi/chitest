@@ -30,10 +30,16 @@ WDAY = ("월", "화", "수", "목", "금", "토", "일")
 HELP = """사용법
 
 /watch 20261115   이 날짜에 뜨면 알림
+/now              찾는 것만 바로 확인
+/nowall           그날 전체 목록 확인
 /status           현재 감시 상태
-/now              지금 바로 확인
+/trace on         매 조회마다 한 줄씩 보고 (5분 뒤 자동 종료)
+/trace on 30      30분 동안 유지
+/trace off        끄기
 /stop             감시 중지
 /help             이 도움말
+
+/now 20261107 처럼 날짜를 직접 줄 수도 있습니다.
 
 날짜는 20261115 형식입니다. (1115 처럼 월일만 보내도 됩니다)"""
 
@@ -92,25 +98,74 @@ class State:
         self.branch = branch or "main"
         self.target = None          # date | None
         self.tg_offset = 0          # 처리한 텔레그램 update_id
+        self.trace_until = None     # datetime | None. 이 시각까지 매 조회를 보고
         self._sha = None            # 저장소 파일 sha (커밋에 필요)
         self.load()
+
+    def trace_on(self):
+        return self.trace_until is not None and datetime.now(KST) <= self.trace_until
 
     # ---- 읽기
 
     def load(self):
-        data = {}
-        if os.path.exists(STATE_FILE):
-            try:
-                with open(STATE_FILE, encoding="utf-8") as f:
-                    data = json.load(f)
-            except (OSError, ValueError) as e:
-                log("state.json 읽기 실패(무시): %s" % e)
+        # 저장소 최신본이 우선이다. 체크아웃된 파일은 재실행 시 과거 커밋일 수
+        # 있어서 신뢰할 수 없다. (Re-run 은 최초 실행 시점의 커밋을 가져온다)
+        data = self._remote_load()
+        if data is None:
+            data = self._local_load()
+            log("state: 로컬 파일에서 읽었습니다.")
+        else:
+            log("state: 저장소 최신본에서 읽었습니다.")
 
         raw = data.get("target_date")
         if raw:
             self.target = parse_date(str(raw))
         self.tg_offset = int(data.get("tg_offset") or 0)
-        self._sha = self._remote_sha()
+
+        raw = data.get("trace_until")
+        if raw:
+            try:
+                self.trace_until = datetime.strptime(
+                    str(raw), "%Y-%m-%d %H:%M:%S").replace(tzinfo=KST)
+            except ValueError:
+                self.trace_until = None
+
+    @staticmethod
+    def _local_load():
+        if not os.path.exists(STATE_FILE):
+            return {}
+        try:
+            with open(STATE_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError) as e:
+            log("state.json 읽기 실패(무시): %s" % e)
+            return {}
+
+    def _remote_load(self):
+        """저장소의 state.json 을 읽어온다. 실패하면 None (sha 도 같이 갱신)."""
+        if not (self.gh_token and self.gh_repo):
+            return None
+        try:
+            r = requests.get(
+                "https://api.github.com/repos/%s/contents/%s" % (self.gh_repo, STATE_FILE),
+                headers=self._headers(), params={"ref": self.branch}, timeout=20)
+        except requests.RequestException as e:
+            log("state 원격 읽기 예외: %s" % str(e)[:160])
+            return None
+
+        if r.status_code == 404:
+            return {}                      # 아직 파일이 없는 정상 상태
+        if r.status_code != 200:
+            log("state 원격 읽기 실패 %s" % r.status_code)
+            return None
+
+        body = r.json()
+        self._sha = body.get("sha")
+        try:
+            return json.loads(base64.b64decode(body.get("content", "")).decode("utf-8"))
+        except (ValueError, TypeError) as e:
+            log("state 원격 파싱 실패: %s" % e)
+            return None
 
     def _remote_sha(self):
         if not (self.gh_token and self.gh_repo):
@@ -131,6 +186,8 @@ class State:
         payload = {
             "target_date": self.target.strftime("%Y%m%d") if self.target else None,
             "tg_offset": self.tg_offset,
+            "trace_until": (self.trace_until.strftime("%Y-%m-%d %H:%M:%S")
+                            if self.trace_until else None),
             "updated_at": datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
         }
         body = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
@@ -234,7 +291,7 @@ class Telegram:
 def handle_command(text, state, tg, status_fn, now_fn):
     """
     명령 하나를 처리한다.
-    status_fn() -> 상태 문자열, now_fn() -> 즉시 조회 결과 문자열
+    status_fn() -> 상태 문자열, now_fn(날짜|None) -> 즉시 조회 결과 문자열
     반환값: 감시 대상 날짜가 바뀌었으면 True
     """
     cmd = text.strip()
@@ -250,9 +307,17 @@ def handle_command(text, state, tg, status_fn, now_fn):
         tg.send(status_fn())
         return False
 
-    if head in ("/now", "now"):
-        tg.send(now_fn())
+    if head in ("/now", "now", "/nowall", "nowall"):
+        # 인자로 날짜를 주면 그 날짜를, 없으면 감시 중인 날짜를 본다
+        d = parse_date(arg) if arg else None
+        if arg and d is None:
+            tg.send("날짜를 알아듣지 못했습니다: %r\n예) /now 20261107" % arg)
+            return False
+        tg.send(now_fn(d or state.target, head.lstrip("/") == "nowall"))
         return False
+
+    if head in ("/trace", "trace"):
+        return _set_trace(arg, state, tg)
 
     if head in ("/stop", "stop"):
         state.target = None
@@ -273,6 +338,36 @@ def handle_command(text, state, tg, status_fn, now_fn):
         return _set_date(d, state, tg)
 
     tg.send("모르는 명령입니다.\n\n" + HELP)
+    return False
+
+
+def _set_trace(arg, state, tg):
+    """
+    /trace on        5분간 매 조회 보고
+    /trace on 30     30분간
+    /trace off       끄기
+    """
+    tokens = (arg or "").lower().split()
+    if tokens and tokens[0] in ("off", "stop", "0"):
+        state.trace_until = None
+        state.save("trace off")
+        tg.send("trace 를 껐습니다.")
+        return False
+
+    if tokens and tokens[0] in ("on", "start"):
+        tokens = tokens[1:]
+
+    minutes = 5
+    if tokens:
+        if not tokens[0].isdigit():
+            tg.send("시간을 알아듣지 못했습니다: %r\n예) /trace on 30" % arg)
+            return False
+        minutes = max(1, min(180, int(tokens[0])))
+
+    state.trace_until = datetime.now(KST) + timedelta(minutes=minutes)
+    state.save("trace on %dm" % minutes)
+    tg.send("trace 를 켰습니다.\n%d분 동안 매 조회마다 한 줄씩 보냅니다.\n끄려면 /trace off"
+            % minutes)
     return False
 
 
