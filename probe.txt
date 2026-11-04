@@ -1,0 +1,9 @@
+probe 2026-11-04 16:18:30 KST
+host  www.cgv.co.kr
+
+plain          403   len=13260   BLOCKED(비정상적으로,이용이 제한)
+chrome-ua      403   len=13260   BLOCKED(비정상적으로,이용이 제한)
+chrome-full    403   len=13621   BLOCKED(비정상적으로,이용이 제한)
+mobile-ua      403   len=13260   BLOCKED(비정상적으로,이용이 제한)
+
+OK 가 하나라도 있으면 이 러너에서 접근 가능합니다.
