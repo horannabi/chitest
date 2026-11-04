@@ -77,6 +77,18 @@ def summarize(body):
     out.append("  data-* : " + ", ".join("%s(%d)" % kv for kv in datas.most_common(15)))
     found = [m for m in MARKERS if m.lower() in body.lower()]
     out.append("  표시    : " + (", ".join(found) if found else "(없음)"))
+
+    # 이 응답 안에서 또 호출하는 주소가 있는지 (좌석 배치도는 보통 따로 받는다)
+    calls = set(re.findall(r'\$\.(?:post|get|ajax)\(\s*["\'](/[^"\']+)["\']', body))
+    calls |= set(re.findall(r'url\s*:\s*["\'](/[^"\']+)["\']', body))
+    calls |= set(re.findall(r'["\'](/[A-Za-z]+/[A-Za-z][A-Za-z0-9_]*)["\']', body))
+    out.append("  호출    : " + (", ".join(sorted(calls)[:20]) if calls else "(없음)"))
+
+    # 좌석 영역 구조 샘플 (내용은 지우고 태그 골격만)
+    m = re.search(r'<[^>]*class="[^"]*wrap-seats[^"]*"[^>]*>(.{0,1500})', body, re.S)
+    if m:
+        skel = re.sub(r'>[^<]{1,200}<', '><', m.group(1))
+        out.append("  좌석영역: " + re.sub(r'\s+', ' ', skel)[:700])
     return out
 
 
