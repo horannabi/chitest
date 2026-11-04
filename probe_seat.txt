@@ -1,14 +1,17 @@
-probe_seat 2026-11-04 16:53:50 KST
+probe_seat 2026-11-04 16:55:57 KST
 date 20261104
 
-목록 200 len=30197
+목록 200 len=30976
 회차 screenPlanId=1109718 playNumber=5
 
 /Popup/SeatChoiceSeatMap -> 200 len=23009
-  class  : screen(1)
+  class  : choose-seat(91), mini(91), checked(16), row(12), head(12), accessible(2), screen(1)
   data-* : data-rowname(102), data-seatgroup(91), data-colnumber(91), data-seatmapid(91), data-screenid(91), data-screenplanid(91)
   표시    : (없음)
   호출    : (없음)
+  좌석수  : normal=0, reserved=0, selected=0, disabled=0, accessible=2, couple=0
+  좌석요소: <input type='checkbox' class='choose-seat ' id='A3' value='A3' data-seatgroup='2' data-rowname='A' data-colnumber='3' data-seatmapid='8001' data-screenid='66' data-screenplanid='1109718' /> || <input type='checkbox' class='choose-seat ' id='A4' value='A4' data-seatgroup='2' data-rowname='A' data-colnumber='4' data-seatmapid='8002' data-screenid='66' data-screenplanid='1109718' /> || <input type='checkbox' class='choose-seat ' id='A5' value='A5' data-seatgroup='2' data-rowname='A' data-colnumber='5' data-seatmapid='8003' data-screenid='66' data-screenplanid='1109718' />
+  seatgroup 값: 2(65), 1(19), 3(7)
 
 /Popup/Seatchoice -> 200 len=39991
   class  : input-seat-block(10), input-seat(4), input-radio(4), input-indicator(4), kind(3), input-select(3), title(2), popup(1), seatChoice(1), section-pop-top(1), btn-rsv-reset(1), section-pop-movie(1), poster(1), rate-x(1), table-movie-info(1), time(1), number(1), seats(1), total-price(1), section-pop-theater(1), wrap-number-info(1), id_2780(1), id_2834(1), id_4683(1), wrap-seats(1)
@@ -16,23 +19,6 @@ date 20261104
   표시    : 장애, 우대, 커플, disabled, handicap, 선택, 예매
   호출    : /Popup/SeatChoiceConfirm, /Popup/SeatChoiceSeatMap, /popup/AddSeatGrap, /popup/RemoveAllSeatGrap, /popup/RemoveSeatGrap
   좌석수  : normal=1, reserved=1, selected=1, disabled=1, accessible=1, couple=1
-  좌석요소: < seatCount) {
-                            $(this).prop("checked", false);
-                    alert("선택한 인원수보다 좌석을 많이 선택하셨습니다.");
-                    return false;
-                }
-                url = "/popup/AddSeatGrap";
-            } else {
-                url = "/popup/RemoveSeatGrap"
-                    }
-                    $.ajax({
-            url: url,
-                        dataType: "json",
-                        data: {
-                    "screenPlanId": $.desktop.reserveData.screenPlanId,
-                            "seatMapId": seatMapId
-                     
-  seatgroup 값:  + group + (7)
   script  : reSelected()) { return; } var arrSeatMapId = new Array(); $("div.seatmap input.choose-seat.accessible:checked, div.seatmap input.choose-seat_large.accessible:checked", "di
   script  : p("checked", false).removeProp("checked"); }); if (arrSeatMapId.length == 0) { $.desktop.seatchoicepop.viewSelectedSeat(); $.desktop.seatchoicepop.hideSelectSeat(); 
   script  :  "screenPlanId": $.desktop.reserveData.screenPlanId, "seatMapId": arrSeatMapId.toString() }, method: "POST", success: function (result) { 
