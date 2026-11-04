@@ -1,0 +1,6 @@
+# 저장소에 올리지 않을 로컬 전용 문서
+README.local.md
+SECRETS.local.md
+
+__pycache__/
+*.pyc

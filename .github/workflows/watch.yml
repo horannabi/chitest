@@ -1,0 +1,67 @@
+name: watch
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: "날짜 (20261115). 비우면 텔레그램으로 지정한 값 사용"
+        required: false
+        type: string
+      force:
+        description: "날짜 조건 무시하고 실행"
+        required: false
+        default: false
+        type: boolean
+
+  # 6시간씩 4번 = 24시간 가동. cron 은 UTC 기준(KST-9).
+  schedule:
+    - cron: "0 15 * * *"   # 00:00 KST
+    - cron: "0 21 * * *"   # 06:00 KST
+    - cron: "0 3 * * *"    # 12:00 KST
+    - cron: "0 9 * * *"    # 18:00 KST
+
+permissions:
+  contents: write          # state.json 갱신
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350   # 상한 360분. 여유 두고 350.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - run: python watch.py
+        env:
+          # --- 대상 (전부 Secrets 에서) ---
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          LABEL: ${{ secrets.LABEL }}
+
+          # --- 날짜 (비워두면 텔레그램 /watch 로 지정) ---
+          TARGET_DATE: ${{ inputs.target_date }}
+
+          # --- 동작 ---
+          MODE: ${{ vars.MODE || 'until' }}
+          POLL_SEC: ${{ vars.POLL_SEC || '10' }}
+          BURST_SEC: ${{ vars.BURST_SEC || '2' }}
+          BURST_WINDOWS: ${{ vars.BURST_WINDOWS }}
+          IDLE_SEC: ${{ vars.IDLE_SEC || '5' }}
+          MAX_RUN_MIN: "340"
+          NOTIFY_START: ${{ vars.NOTIFY_START || '0' }}
+          VERBOSE: ${{ vars.VERBOSE || '0' }}
+          FORCE: ${{ inputs.force && '1' || '0' }}
+
+          # --- 알림 ---
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
