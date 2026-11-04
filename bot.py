@@ -200,7 +200,15 @@ class State:
 
     # ---- 쓰기
 
-    def save(self, reason=""):
+    def save(self, reason="", commit=True):
+        """
+        commit=False 면 저장소에 올리지 않고 로컬 파일만 쓴다.
+        offset 처럼 자주 바뀌지만 잃어도 큰일 없는 값에 쓴다.
+        커밋이 잦으면 사람이 push 할 때 계속 부딪힌다.
+        """
+        self._write(reason, commit)
+
+    def _write(self, reason, commit):
         payload = {
             "target_date": self.target.strftime("%Y%m%d") if self.target else None,
             "tg_offset": self.tg_offset,
@@ -218,7 +226,8 @@ class State:
         except OSError as e:
             log("state.json 쓰기 실패: %s" % e)
 
-        self._commit(body, reason)
+        if commit:
+            self._commit(body, reason)
 
     def _commit(self, body, reason):
         if not (self.gh_token and self.gh_repo):

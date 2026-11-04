@@ -532,8 +532,8 @@ def resend_alert(cfg, state, tg, fetcher):
     state.ack_last = now
     tg.send("%s\n\n아직 확인하지 않으셨습니다. (%d번째)\n확인하셨으면 /ok 를 보내주세요."
             % (state.ack_text, state.ack_count))
-    if state.ack_count % 12 == 0:          # 너무 자주 커밋하지 않도록
-        state.save("ack %d" % state.ack_count)
+    if state.ack_count % 12 == 0:          # 횟수는 참고값이라 저장소에는 안 올린다
+        state.save("ack %d" % state.ack_count, commit=False)
 
 
 def main():
@@ -581,7 +581,7 @@ def main():
         for update_id, text in tg.poll(state.tg_offset):
             state.tg_offset = update_id
             if text is None:                 # 내 대화방이 아닌 메시지
-                state.save("offset")
+                state.save("offset", commit=False)
                 continue
             log("명령 수신")
             changed = handle_command(
@@ -591,7 +591,7 @@ def main():
                 last_count = None
                 last_reason = None
                 checks = 0
-            state.save("offset")
+            state.save("offset", commit=False)
 
         # ---- 미확인 알림 반복 전송
         resend_alert(cfg, state, tg, fetcher)
