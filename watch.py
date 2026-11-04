@@ -497,13 +497,23 @@ def snapshot(cfg, fetcher, target, show_all=False):
 
 
 def raise_alert(cfg, state, tg, text):
-    """알림을 걸어둔다. /ok 를 받을 때까지 계속 다시 보낸다."""
+    """
+    알림을 걸어둔다. /ok 를 받을 때까지 계속 다시 보낸다.
+
+    이미 확인 안 된 알림이 있으면 덮어쓰지 않고 뒤에 이어 붙인다.
+    새 소식이 와도 앞의 내용이 사라지지 않게 하려는 것이다.
+    """
+    entry = "[%s] %s" % (datetime.now(KST).strftime("%H:%M"), text)
+    if state.ack_date is not None and state.ack_text:
+        state.ack_text = state.ack_text + "\n\n" + ("-" * 20) + "\n" + entry
+    else:
+        state.ack_text = entry
+
     state.ack_date = state.target or state.ack_date
-    state.ack_count = 1
-    state.ack_text = text
+    state.ack_count = 1                   # 새 소식이니 횟수는 다시 센다
     state.ack_last = datetime.now(KST)
     state.save("alert")
-    tg.send(text + "\n\n확인하셨으면 /ok 를 보내주세요.")
+    tg.send(state.ack_text + "\n\n확인하셨으면 /ok 를 보내주세요.")
 
 
 def resend_alert(cfg, state, tg, fetcher):
