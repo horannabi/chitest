@@ -92,14 +92,24 @@ def summarize(body):
     if any(tally.values()):
         out.append("  좌석수  : " + ", ".join("%s=%d" % (k, v) for k, v in tally.items()))
 
-    # 좌석 요소 샘플 (내용은 지우고 태그 골격만)
-    m = re.search(r'(<[^>]*class="[^"]*\b(?:normal|reserved|accessible)\b[^"]*"[^>]*>.{0,400})',
-                  body, re.S)
-    if not m:
-        m = re.search(r'<[^>]*class="[^"]*wrap-seats[^"]*"[^>]*>(.{0,1200})', body, re.S)
-    if m:
-        skel = re.sub(r'>[^<]{1,200}<', '><', m.group(1))
-        out.append("  샘플    : " + re.sub(r'\s+', ' ', skel)[:700])
+    # 좌석 요소 원본 샘플 2개. 상태가 어느 속성에 들어가는지 보려는 것.
+    seats = re.findall(r'<[^>]*data-seatmapid="[^"]*"[^>]*>', body)
+    if seats:
+        out.append("  좌석요소: " + " || ".join(seats[:2])[:600])
+        groups = Counter(re.findall(r'data-seatgroup="([^"]*)"', body))
+        out.append("  seatgroup 값: " + ", ".join("%s(%d)" % kv for kv in groups.most_common(10)))
+
+    # 인라인 스크립트에서 좌석 상태를 칠하는 부분
+    hits = []
+    for sm in re.findall(r'<script[^>]*>(.*?)</script>', body, re.S):
+        for mm in re.finditer(r'.{90}(?:addClass|SeatMap|seatMap|reserved|soldSeat).{150}', sm, re.S):
+            hits.append(re.sub(r'\s+', ' ', mm.group(0)))
+            if len(hits) >= 4:
+                break
+        if len(hits) >= 4:
+            break
+    for h in hits:
+        out.append("  script  : " + h[:260])
     return out
 
 
