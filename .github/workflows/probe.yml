@@ -2,6 +2,17 @@ name: probe
 
 on:
   workflow_dispatch:
+    inputs:
+      kind:
+        description: "무엇을 진단할지"
+        required: true
+        default: seat
+        type: choice
+        options: [seat, reach]
+      date:
+        description: "날짜 (20261107). seat 진단에만 사용"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -21,15 +32,24 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - run: python probe.py
+      - name: 접근성 진단
+        if: inputs.kind == 'reach'
+        run: python probe.py
         env:
           PROBE_URL: ${{ secrets.PROBE_URL }}
+
+      - name: 좌석 구조 진단
+        if: inputs.kind == 'seat'
+        run: python probe_seat.py
+        env:
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+          PROBE_DATE: ${{ inputs.date }}
 
       - name: 결과 커밋
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add probe.txt
+          git add -A probe.txt probe_seat.txt
           git diff --staged --quiet || git commit -m "probe result"
           git pull --rebase --autostash
           git push
