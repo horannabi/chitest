@@ -30,6 +30,7 @@ WDAY = ("월", "화", "수", "목", "금", "토", "일")
 HELP = """사용법
 
 /watch 20261115   이 날짜에 뜨면 알림
+/ok               알림 확인 (이걸 보낼 때까지 5초마다 반복됩니다)
 /now              찾는 것만 바로 확인
 /nowall           그날 전체 목록 확인
 /status           현재 감시 상태
@@ -102,6 +103,14 @@ class State:
         self.tg_offset = 0          # 처리한 텔레그램 update_id
         self.trace_until = None     # datetime | None. 이 시각까지 매 조회를 보고
         self.seatwatch = False      # 찾은 뒤에도 자리가 나는지 계속 지켜볼지
+
+        # 읽음 확인(/ok) 을 받을 때까지 알림을 반복한다.
+        # 본문은 저장소에 남기지 않는다. 실행 중에는 메모리에 들고 있고,
+        # 세션이 바뀌면 그때 한 번만 새로 조회해서 만든다.
+        self.ack_date = None        # date | None. 미확인 알림이 걸린 날짜
+        self.ack_count = 0          # 지금까지 보낸 횟수
+        self.ack_text = None        # 메모리 전용. 저장하지 않는다.
+        self.ack_last = None        # 메모리 전용. 마지막 전송 시각
         self._sha = None            # 저장소 파일 sha (커밋에 필요)
         self.load()
 
@@ -126,6 +135,10 @@ class State:
         self.tg_offset = int(data.get("tg_offset") or 0)
 
         self.seatwatch = bool(data.get("seatwatch"))
+
+        raw = data.get("ack_date")
+        self.ack_date = parse_date(str(raw)) if raw else None
+        self.ack_count = int(data.get("ack_count") or 0)
 
         raw = data.get("trace_until")
         if raw:
@@ -192,6 +205,8 @@ class State:
             "target_date": self.target.strftime("%Y%m%d") if self.target else None,
             "tg_offset": self.tg_offset,
             "seatwatch": self.seatwatch,
+            "ack_date": self.ack_date.strftime("%Y%m%d") if self.ack_date else None,
+            "ack_count": self.ack_count,
             "trace_until": (self.trace_until.strftime("%Y-%m-%d %H:%M:%S")
                             if self.trace_until else None),
             "updated_at": datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
@@ -320,6 +335,19 @@ def handle_command(text, state, tg, status_fn, now_fn):
             tg.send("날짜를 알아듣지 못했습니다: %r\n예) /now 20261107" % arg)
             return False
         tg.send(now_fn(d or state.target, head.lstrip("/") == "nowall"))
+        return False
+
+    if head in ("/ok", "ok", "/ack", "ack", "확인"):
+        if state.ack_date is None:
+            tg.send("반복 중인 알림이 없습니다.")
+            return False
+        n = state.ack_count
+        state.ack_date = None
+        state.ack_count = 0
+        state.ack_text = None
+        state.ack_last = None
+        state.save("ack")
+        tg.send("확인했습니다. 알림을 멈춥니다. (%d번 보냈습니다)" % n)
         return False
 
     if head in ("/trace", "trace"):

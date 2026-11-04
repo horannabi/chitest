@@ -113,6 +113,8 @@ class Config:
         self.burst_windows = parse_windows(env("BURST_WINDOWS", ""))
         self.max_run_min = env_int("MAX_RUN_MIN", 340)
         self.idle_sec = env_int("IDLE_SEC", 5)
+        # 읽음 확인(/ok) 전까지 알림을 다시 보내는 간격(초)
+        self.repeat_sec = env_int("ALERT_REPEAT_SEC", 5)
 
         self.tg_token = env("TELEGRAM_BOT_TOKEN")
         self.tg_chat = env("TELEGRAM_CHAT_ID")
@@ -494,6 +496,36 @@ def snapshot(cfg, fetcher, target, show_all=False):
     return "\n".join(["날짜 %s / %d건" % (ymd, len(hits)), ""] + format_items(hits))
 
 
+def raise_alert(cfg, state, tg, text):
+    """알림을 걸어둔다. /ok 를 받을 때까지 계속 다시 보낸다."""
+    state.ack_date = state.target or state.ack_date
+    state.ack_count = 1
+    state.ack_text = text
+    state.ack_last = datetime.now(KST)
+    state.save("alert")
+    tg.send(text + "\n\n확인하셨으면 /ok 를 보내주세요.")
+
+
+def resend_alert(cfg, state, tg, fetcher):
+    """미확인 알림이 있으면 간격에 맞춰 다시 보낸다."""
+    if state.ack_date is None:
+        return
+    now = datetime.now(KST)
+    if state.ack_last and (now - state.ack_last).total_seconds() < cfg.repeat_sec:
+        return
+
+    if not state.ack_text:
+        # 세션이 바뀌어 본문이 없어졌다. 이때만 새로 조회한다.
+        state.ack_text = snapshot(cfg, fetcher, state.ack_date)
+
+    state.ack_count += 1
+    state.ack_last = now
+    tg.send("%s\n\n아직 확인하지 않으셨습니다. (%d번째)\n확인하셨으면 /ok 를 보내주세요."
+            % (state.ack_text, state.ack_count))
+    if state.ack_count % 12 == 0:          # 너무 자주 커밋하지 않도록
+        state.save("ack %d" % state.ack_count)
+
+
 def main():
     cfg = Config()
     start = datetime.now(KST)
@@ -525,6 +557,10 @@ def main():
         _ok, why = should_watch(cfg, state.target, datetime.now(KST))
         out = "%s\n조회 %d회 / 이 세션 종료까지 %d분" % (
             why, checks, max(0, int((deadline - datetime.now(KST)).total_seconds() // 60)))
+        if state.ack_date is not None:
+            out += "\n미확인 알림 있음 (%d번 보냄). /ok 로 멈춥니다." % state.ack_count
+        if state.seatwatch:
+            out += "\n빈자리 지켜보기: 켜짐"
         return out + ("\n" + cfg.site_url if cfg.site_url else "")
 
     if cfg.notify_start:
@@ -547,10 +583,17 @@ def main():
                 checks = 0
             state.save("offset")
 
+        # ---- 미확인 알림 반복 전송
+        resend_alert(cfg, state, tg, fetcher)
+
         target = state.target
         watching, reason = should_watch(cfg, target, datetime.now(KST))
 
         if not watching:
+            if state.ack_date is not None:
+                # 감시는 끝났지만 아직 확인을 못 받았다. 재전송만 하며 대기한다.
+                time.sleep(min(cfg.repeat_sec, cfg.idle_sec))
+                continue
             if reason != last_reason:
                 log(reason + " 대기 모드로 텔레그램 명령만 기다립니다.")
                 last_reason = reason
@@ -580,18 +623,17 @@ def main():
             if not announced:
                 # 편성이 뜬 것 자체를 처음 알리는 경우
                 log("일치 항목 %d건 발견. 알림을 보냅니다." % len(hits))
-                check_seats(cfg, fetcher, hits)
+                free_before = check_seats(cfg, fetcher, hits)
                 text = build_message(cfg, target, hits)
                 if cfg.verbose:
                     print(text, flush=True)
-                tg.send(text)
                 announced = True
+                raise_alert(cfg, state, tg, text)
                 if not state.seatwatch:
-                    state.target = None      # 빈자리 감시를 안 하면 여기서 끝
+                    state.target = None      # 감시는 끝. 확인 받을 때까지 재전송만 한다
                     state.save("done")
-                    return 0
+                    continue
                 tg.send("이어서 빈자리를 지켜봅니다. 끄려면 /seatwatch off")
-                free_before = check_seats(cfg, fetcher, hits)
             elif state.seatwatch:
                 # 매진이던 회차에 자리가 나면 알린다
                 free_now = check_seats(cfg, fetcher, hits)
@@ -599,9 +641,10 @@ def main():
                           if v > 0 and free_before.get(k, 0) == 0]
                 if opened:
                     log("빈자리 발생 %d건" % len(opened))
-                    tg.send("자리가 났습니다!\n날짜 %s (%s)\n\n%s\n\n%s"
-                            % (target.strftime("%Y%m%d"), WDAY[target.weekday()],
-                               "\n".join(format_items(hits)), cfg.site_url))
+                    raise_alert(cfg, state, tg,
+                                "자리가 났습니다!\n날짜 %s (%s)\n\n%s\n\n%s"
+                                % (target.strftime("%Y%m%d"), WDAY[target.weekday()],
+                                   "\n".join(format_items(hits)), cfg.site_url))
                 free_before = free_now
 
         # trace 가 켜져 있으면 못 찾았을 때도 매 조회마다 한 줄씩 보고한다
