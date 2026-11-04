@@ -588,9 +588,12 @@ def main():
                 text, state, tg, status_text,
                 lambda d, allitems=False: snapshot(cfg, fetcher, d, allitems))
             if changed:
+                # 감시 대상이 바뀌었으니 직전 날짜에 대한 판단은 전부 버린다
                 last_count = None
                 last_reason = None
                 checks = 0
+                announced = False
+                free_before = {}
             state.save("offset", commit=False)
 
         # ---- 미확인 알림 반복 전송
