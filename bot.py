@@ -33,6 +33,8 @@ HELP = """사용법
 /now              찾는 것만 바로 확인
 /nowall           그날 전체 목록 확인
 /status           현재 감시 상태
+/seatwatch on     찾은 뒤에도 자리 나는지 계속 지켜보기
+/seatwatch off    끄기
 /trace on         매 조회마다 한 줄씩 보고 (5분 뒤 자동 종료)
 /trace on 30      30분 동안 유지
 /trace off        끄기
@@ -99,6 +101,7 @@ class State:
         self.target = None          # date | None
         self.tg_offset = 0          # 처리한 텔레그램 update_id
         self.trace_until = None     # datetime | None. 이 시각까지 매 조회를 보고
+        self.seatwatch = False      # 찾은 뒤에도 자리가 나는지 계속 지켜볼지
         self._sha = None            # 저장소 파일 sha (커밋에 필요)
         self.load()
 
@@ -121,6 +124,8 @@ class State:
         if raw:
             self.target = parse_date(str(raw))
         self.tg_offset = int(data.get("tg_offset") or 0)
+
+        self.seatwatch = bool(data.get("seatwatch"))
 
         raw = data.get("trace_until")
         if raw:
@@ -186,6 +191,7 @@ class State:
         payload = {
             "target_date": self.target.strftime("%Y%m%d") if self.target else None,
             "tg_offset": self.tg_offset,
+            "seatwatch": self.seatwatch,
             "trace_until": (self.trace_until.strftime("%Y-%m-%d %H:%M:%S")
                             if self.trace_until else None),
             "updated_at": datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
@@ -318,6 +324,14 @@ def handle_command(text, state, tg, status_fn, now_fn):
 
     if head in ("/trace", "trace"):
         return _set_trace(arg, state, tg)
+
+    if head in ("/seatwatch", "seatwatch"):
+        on = (arg or "").lower().strip() not in ("off", "0", "stop")
+        state.seatwatch = on
+        state.save("seatwatch %s" % ("on" if on else "off"))
+        tg.send("찾은 뒤에도 자리가 나는지 계속 지켜봅니다." if on
+                else "자리 지켜보기를 껐습니다. 찾으면 알리고 끝냅니다.")
+        return False
 
     if head in ("/stop", "stop"):
         state.target = None

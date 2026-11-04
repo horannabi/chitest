@@ -31,6 +31,7 @@ import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 
+import seats
 from bot import State, Telegram, handle_command, parse_date
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -250,7 +251,8 @@ NAME_RE = re.compile(r'<div class="title">(.*?)</div>', re.S)
 GROUP_RE = re.compile(
     r'<div class="screen-name"[^>]*>(.*?)</div>(.*?)(?=<div class="screen-name"|\Z)', re.S)
 SLOT_RE = re.compile(
-    r'<div class="time"[^>]*data-screenplanid="(\d+)"[^>]*>(.*?)</div>', re.S)
+    r'<div class="time"((?:\s+data-[a-z]+="[^"]*")+)\s*>(.*?)</div>', re.S)
+ATTR_RE = re.compile(r'data-([a-z]+)="([^"]*)"')
 
 # markdown 모드용
 MD_SLOT_RE = re.compile(r"^\[(\d{1,2}:\d{2})\s*~\s*(\d{1,2}:\d{2})\s*(.*?)\]\(")
@@ -279,14 +281,16 @@ def parse_html(body):
         groups = []
         for gname, gbody in GROUP_RE.findall(block):
             slots = []
-            for _sid, sbody in SLOT_RE.findall(gbody):
+            for raw_attrs, sbody in SLOT_RE.findall(gbody):
+                # 좌석 조회에 필요한 식별자를 그대로 들고 간다
+                attrs = dict(ATTR_RE.findall(raw_attrs))
                 txt = strip_tags(sbody)
                 m = re.match(r"^(\d{1,2}:\d{2})\s*~\s*(\d{1,2}:\d{2})\s*(.*)$", txt)
                 if m:
                     slots.append({"time": "%s~%s" % (m.group(1), m.group(2)),
-                                  "note": m.group(3).strip()})
+                                  "note": m.group(3).strip(), "attrs": attrs})
                 elif txt:
-                    slots.append({"time": txt, "note": ""})
+                    slots.append({"time": txt, "note": "", "attrs": attrs})
             if slots:
                 groups.append({"name": strip_tags(gname), "slots": slots})
 
@@ -374,8 +378,41 @@ def format_items(items):
             lines.append("   %s" % g["name"])
             for s in g["slots"]:
                 note = (" [%s]" % s["note"]) if s["note"] else ""
-                lines.append("     %s%s" % (s["time"], note))
+                extra = s.get("seat_note", "")
+                lines.append("     %s%s%s" % (s["time"], note, extra))
     return lines
+
+
+def check_seats(cfg, fetcher, items):
+    """
+    목록상 매진이거나 잔여가 적은 회차만 좌석까지 들여다본다.
+    각 회차에 seat_note 를 붙이고, {회차키: 일반 빈자리수} 를 돌려준다.
+    """
+    result = {}
+    origin = "/".join(cfg.target_url.split("/")[:3])
+    for it in items:
+        for g in it["groups"]:
+            for s in g["slots"]:
+                if not seats.needs_closer_look(s.get("note")):
+                    continue
+                attrs = s.get("attrs") or {}
+                key = attrs.get("screenplanid")
+                if not key:
+                    continue
+                html = seats.fetch(fetcher.sess, origin, attrs)
+                if html is None:
+                    s["seat_note"] = " (좌석 확인 실패)"
+                    continue
+                c = seats.count(html)
+                result[key] = c["free"]
+                if c["free"]:
+                    s["seat_note"] = " -> 앉을 수 있는 자리 %d (%s)" % (
+                        c["free"], ", ".join(seats.free_labels(html, 8)))
+                else:
+                    s["seat_note"] = " -> 없음%s" % (
+                        " (장애인석 %d 비어있음)" % c["free_special"]
+                        if c["free_special"] else "")
+    return result
 
 
 def build_message(cfg, target, hits):
@@ -453,6 +490,7 @@ def snapshot(cfg, fetcher, target, show_all=False):
     if not hits:
         return ("날짜 %s\n아직 없습니다. (그날 전체 %d개)\n전체를 보려면 /nowall"
                 % (ymd, len(items)))
+    check_seats(cfg, fetcher, hits)          # 매진/소수 잔여 회차는 좌석까지 확인
     return "\n".join(["날짜 %s / %d건" % (ymd, len(hits)), ""] + format_items(hits))
 
 
@@ -480,6 +518,8 @@ def main():
     checks = 0
     last_count = None
     last_reason = None
+    announced = False        # 편성 발견을 이미 알렸는지
+    free_before = {}         # 회차별 직전 빈자리 수
 
     def status_text():
         _ok, why = should_watch(cfg, state.target, datetime.now(KST))
@@ -536,14 +576,33 @@ def main():
 
         if contains_keyword(body, cfg.keywords):
             hits = match_keywords(items, cfg.keywords)
-            log("일치 항목 %d건 발견. 알림을 보냅니다." % len(hits))
-            text = build_message(cfg, target, hits)
-            if cfg.verbose:
-                print(text, flush=True)
-            tg.send(text)
-            state.target = None              # 알렸으면 감시 종료
-            state.save("done")
-            return 0
+
+            if not announced:
+                # 편성이 뜬 것 자체를 처음 알리는 경우
+                log("일치 항목 %d건 발견. 알림을 보냅니다." % len(hits))
+                check_seats(cfg, fetcher, hits)
+                text = build_message(cfg, target, hits)
+                if cfg.verbose:
+                    print(text, flush=True)
+                tg.send(text)
+                announced = True
+                if not state.seatwatch:
+                    state.target = None      # 빈자리 감시를 안 하면 여기서 끝
+                    state.save("done")
+                    return 0
+                tg.send("이어서 빈자리를 지켜봅니다. 끄려면 /seatwatch off")
+                free_before = check_seats(cfg, fetcher, hits)
+            elif state.seatwatch:
+                # 매진이던 회차에 자리가 나면 알린다
+                free_now = check_seats(cfg, fetcher, hits)
+                opened = [k for k, v in free_now.items()
+                          if v > 0 and free_before.get(k, 0) == 0]
+                if opened:
+                    log("빈자리 발생 %d건" % len(opened))
+                    tg.send("자리가 났습니다!\n날짜 %s (%s)\n\n%s\n\n%s"
+                            % (target.strftime("%Y%m%d"), WDAY[target.weekday()],
+                               "\n".join(format_items(hits)), cfg.site_url))
+                free_before = free_now
 
         # trace 가 켜져 있으면 못 찾았을 때도 매 조회마다 한 줄씩 보고한다
         if state.trace_on():
