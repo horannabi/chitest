@@ -23,10 +23,16 @@ on:
 permissions:
   contents: write          # state.json 갱신
 
+# 항상 하나만 돌게 한다. 새 실행이 뜨면 기존 것을 끊고 이어받으므로
+# 겹침도 공백도 생기지 않는다.
+concurrency:
+  group: watch
+  cancel-in-progress: true
+
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 350   # 상한 360분. 여유 두고 350.
+    timeout-minutes: 358   # 상한 360분. 다음 cron 이 올 때까지 버틴다.
 
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +61,7 @@ jobs:
           BURST_SEC: ${{ vars.BURST_SEC || '2' }}
           BURST_WINDOWS: ${{ vars.BURST_WINDOWS }}
           IDLE_SEC: ${{ vars.IDLE_SEC || '5' }}
-          MAX_RUN_MIN: "340"
+          MAX_RUN_MIN: "355"
           NOTIFY_START: ${{ vars.NOTIFY_START || '0' }}
           VERBOSE: ${{ vars.VERBOSE || '0' }}
           FORCE: ${{ inputs.force && '1' || '0' }}
