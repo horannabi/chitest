@@ -73,7 +73,9 @@ def session_for(origin):
 def summarize(body):
     """응답 구조만 요약한다."""
     out = []
-    classes = Counter(c for grp in re.findall(r'class="([^"]+)"', body)
+    # 좌석 배치도는 속성을 작은따옴표로 쓴다. 두 형태 모두 받는다.
+    body_nojs = re.sub(r'<script[^>]*>.*?</script>', ' ', body, flags=re.S)
+    classes = Counter(c for grp in re.findall(r'''class=["']([^"']+)["']''', body_nojs)
                       for c in grp.split())
     datas = Counter(re.findall(r'(data-[a-z0-9-]+)=', body))
     out.append("  class  : " + ", ".join("%s(%d)" % kv for kv in classes.most_common(25)))
@@ -93,10 +95,10 @@ def summarize(body):
         out.append("  좌석수  : " + ", ".join("%s=%d" % (k, v) for k, v in tally.items()))
 
     # 좌석 요소 원본 샘플 2개. 상태가 어느 속성에 들어가는지 보려는 것.
-    seats = re.findall(r'<[^>]*data-seatmapid="[^"]*"[^>]*>', body)
+    seats = re.findall(r'''<[^>]*data-seatmapid=["'][^"']*["'][^>]*>''', body_nojs)
     if seats:
-        out.append("  좌석요소: " + " || ".join(seats[:2])[:600])
-        groups = Counter(re.findall(r'data-seatgroup="([^"]*)"', body))
+        out.append("  좌석요소: " + " || ".join(seats[:3])[:700])
+        groups = Counter(re.findall(r'''data-seatgroup=["']([^"']*)["']''', body_nojs))
         out.append("  seatgroup 값: " + ", ".join("%s(%d)" % kv for kv in groups.most_common(10)))
 
     # 인라인 스크립트에서 좌석 상태를 칠하는 부분
