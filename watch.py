@@ -20,6 +20,7 @@
 
 import os
 import re
+import signal
 import ssl
 import sys
 import time
@@ -33,6 +34,7 @@ from urllib3.util.ssl_ import create_urllib3_context
 
 import seats
 from bot import State, Telegram, handle_command, parse_date
+from health import Health
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -112,6 +114,19 @@ class Config:
         self.burst_sec = env_int("BURST_SEC", 2)
         self.burst_windows = parse_windows(env("BURST_WINDOWS", ""))
         self.max_run_min = env_int("MAX_RUN_MIN", 340)
+        # 세션 시작 후 이 시간이 지나면 다음 실행을 스스로 요청한다(이어받기).
+        # 요청이 실패하면 max_run_min 까지 버티면서 계속 다시 요청한다.
+        self.relay_after_min = env_int("RELAY_AFTER_MIN", max(1, self.max_run_min - 15))
+        self.relay_workflow = env("RELAY_WORKFLOW", "watch.yml")
+        # 생존 기록 간격(초)과 외부 ping 주소
+        # HEALTH=0 이면 생존 기록/외부 ping 을 아예 끈다 (텔레그램 /health on 도 무시)
+        self.health_enabled = env_bool("HEALTH", "1")
+        self.health_beat_sec = env_int("HEALTH_BEAT_SEC", 60)
+        self.healthcheck_url = env("HEALTHCHECK_URL")
+        # 세션 시작 시 잰 감시 공백이 이 초를 넘으면 텔레그램으로 알린다
+        self.gap_alert_sec = env_int("GAP_ALERT_SEC", 120)
+        self.gh_run_id = env("GITHUB_RUN_ID")
+        self.gh_event = env("GITHUB_EVENT_NAME")
         self.idle_sec = env_int("IDLE_SEC", 5)
         # 읽음 확인(/ok) 전까지 알림을 다시 보내는 간격(초)
         self.repeat_sec = env_int("ALERT_REPEAT_SEC", 5)
@@ -385,22 +400,35 @@ def format_items(items):
     return lines
 
 
-def check_seats(cfg, fetcher, items):
+def check_seats(cfg, fetcher, items, pump=None):
     """
     목록상 매진이거나 잔여가 적은 회차만 좌석까지 들여다본다.
     각 회차에 seat_note 를 붙이고, {회차키: 일반 빈자리수} 를 돌려준다.
+
+    좌석까지 보지 않은 회차(잔여가 넉넉한 회차)는 목록의 잔여수를 그대로 넣는다.
+    그래야 매진이던 회차가 한꺼번에 많이 풀린 경우도 비교할 수 있다.
+    조회에 실패한 회차는 결과에 넣지 않는다.
+
+    좌석 조회는 회차마다 왕복이 한 번씩 필요해서 느리다. 그동안 텔레그램
+    명령이 밀리지 않도록, 좌석을 조회하기 직전마다 pump() 를 불러 먼저 처리한다.
     """
     result = {}
     origin = "/".join(cfg.target_url.split("/")[:3])
     for it in items:
         for g in it["groups"]:
             for s in g["slots"]:
-                if not seats.needs_closer_look(s.get("note")):
-                    continue
                 attrs = s.get("attrs") or {}
                 key = attrs.get("screenplanid")
+                note = s.get("note")
+                if not seats.needs_closer_look(note):
+                    n = seats.list_count(note)
+                    if key and n is not None:
+                        result[key] = n
+                    continue
                 if not key:
                     continue
+                if pump:
+                    pump()
                 html = seats.fetch(fetcher.sess, origin, attrs)
                 if html is None:
                     s["seat_note"] = " (좌석 확인 실패)"
@@ -410,6 +438,12 @@ def check_seats(cfg, fetcher, items):
                 if c["free"]:
                     s["seat_note"] = " -> 앉을 수 있는 자리 %d (%s)" % (
                         c["free"], ", ".join(seats.free_labels(html, 8)))
+                    if "매진" in (note or ""):
+                        # 목록은 매진인데 배치도엔 빈자리가 보인다. 판정이 틀렸을
+                        # 수 있으니 표시해두고, 원인을 볼 수 있게 태그 원문을 남긴다.
+                        s["seat_note"] += " ※목록은 매진, 직접 확인 필요"
+                        log("매진 회차 %s 에 빈자리 판정 %d석: %s" % (
+                            key, c["free"], " || ".join(seats.free_tags(html))[:600]))
                 else:
                     s["seat_note"] = " -> 없음%s" % (
                         " (장애인석 %d 비어있음)" % c["free_special"]
@@ -556,6 +590,27 @@ def main():
 
     fetcher = Fetcher(cfg)
     deadline = start + timedelta(minutes=cfg.max_run_min)
+    relay_at = start + timedelta(minutes=cfg.relay_after_min)
+    relay_last = None        # 마지막으로 다음 실행을 요청한 시각
+
+    # ---- 생존 기록. 이전 세션과의 감시 공백을 잰다
+    health = Health(cfg.gh_token, cfg.gh_repo, cfg.gh_branch, cfg.gh_run_id, cfg.gh_event,
+                    ping_url=cfg.healthcheck_url, beat_sec=cfg.health_beat_sec)
+    health.active = cfg.health_enabled and not state.health_off
+    gap = health.start()
+    if gap is not None and gap > cfg.gap_alert_sec:
+        tg.send("감시 공백이 있었습니다: %d초 (%d분)\n이전 세션 run=%s\n/health 로 자세히 볼 수 있습니다."
+                % (gap, gap // 60, health.prev_run))
+    log("다음 실행 요청 예정 %s / 강제 종료 %s"
+        % (relay_at.strftime("%H:%M:%S"), deadline.strftime("%H:%M:%S")))
+
+    # 이어받기로 끊길 때(GitHub 취소) 마지막 생존 시각을 남기고 나간다.
+    # 그래야 다음 세션이 공백을 정확히 잴 수 있다.
+    def on_signal(signum, _frame):
+        health.stop("cancelled(signal %d)" % signum, checks)
+        sys.exit(0)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, on_signal)
     backoff = 0
     checks = 0
     last_count = None
@@ -571,30 +626,63 @@ def main():
             out += "\n미확인 알림 있음 (%d번 보냄). /ok 로 멈춥니다." % state.ack_count
         if state.seatwatch:
             out += "\n빈자리 지켜보기: 켜짐"
+        if not cfg.health_enabled:
+            out += "\nhealth 체크: 꺼짐 (저장소 변수 HEALTH=0)"
+        else:
+            out += "\nhealth 체크: %s%s" % (
+                "켜짐" if health.active else "꺼짐 (/health on 으로 켜기)",
+                " / 외부 ping 사용" if (health.active and cfg.healthcheck_url) else "")
+        r = health.relay
+        if r["requested_at"]:
+            out += "\n다음 실행 요청: %s %s" % (r["requested_at"][11:], "성공" if r["ok"] else "실패")
+        else:
+            out += "\n다음 실행 요청 예정: %s" % relay_at.strftime("%H:%M")
         return out + ("\n" + cfg.site_url if cfg.site_url else "")
 
     if cfg.notify_start:
         tg.send("감시 프로세스가 올라왔습니다.\n" + status_text())
 
-    while datetime.now(KST) < deadline:
-        # ---- 텔레그램 명령 먼저 처리
+    target_changed = [False]   # pump() 안에서 감시 대상이 바뀌었는지
+
+    def pump():
+        """쌓인 텔레그램 명령을 처리한다. 루프 맨 앞과 좌석 조회 사이사이에 부른다."""
         for update_id, text in tg.poll(state.tg_offset):
             state.tg_offset = update_id
             if text is None:                 # 내 대화방이 아닌 메시지
                 state.save("offset", commit=False)
                 continue
             log("명령 수신")
-            changed = handle_command(
-                text, state, tg, status_text,
-                lambda d, allitems=False: snapshot(cfg, fetcher, d, allitems))
-            if changed:
-                # 감시 대상이 바뀌었으니 직전 날짜에 대한 판단은 전부 버린다
-                last_count = None
-                last_reason = None
-                checks = 0
-                announced = False
-                free_before = {}
+            if handle_command(
+                    text, state, tg, status_text,
+                    lambda d, allitems=False: snapshot(cfg, fetcher, d, allitems),
+                    health_fn=health.summary):
+                target_changed[0] = True
             state.save("offset", commit=False)
+
+    while datetime.now(KST) < deadline:
+        # ---- 생존 기록 (beat_sec 마다만 실제로 쓴다)
+        health.beat(checks=checks)
+
+        # ---- 다음 실행 요청. 성공 후에도 안 끊기면 5분 뒤, 실패면 1분 뒤 다시 요청
+        now = datetime.now(KST)
+        if now >= relay_at:
+            wait = 300 if health.relay["ok"] else 60
+            if relay_last is None or (now - relay_last).total_seconds() >= wait:
+                relay_last = now
+                health.request_next(cfg.relay_workflow, cfg.gh_branch,
+                                    {"force": "true"} if cfg.force else {})
+
+        # ---- 텔레그램 명령 먼저 처리
+        pump()
+        health.active = cfg.health_enabled and not state.health_off   # /health on|off 반영
+        if target_changed[0]:
+            # 감시 대상이 바뀌었으니 직전 날짜에 대한 판단은 전부 버린다
+            target_changed[0] = False
+            last_count = None
+            last_reason = None
+            checks = 0
+            announced = False
+            free_before = {}
 
         # ---- 미확인 알림 반복 전송
         resend_alert(cfg, state, tg, fetcher)
@@ -624,6 +712,7 @@ def main():
         if body is None:
             backoff = min(120, (backoff * 2) if backoff else 30)
             log("조회 실패. %d초 후 재시도합니다." % backoff)
+            health.error("조회 실패 (%s)" % ("우회" if fetcher.use_proxy else "직접"))
             time.sleep(backoff)
             continue
         backoff = 0
@@ -636,7 +725,9 @@ def main():
             if not announced:
                 # 편성이 뜬 것 자체를 처음 알리는 경우
                 log("일치 항목 %d건 발견. 알림을 보냅니다." % len(hits))
-                free_before = check_seats(cfg, fetcher, hits)
+                free_before = check_seats(cfg, fetcher, hits, pump)
+                if target_changed[0]:
+                    continue                 # 조회 도중 날짜가 바뀌었다. 결과는 버린다
                 text = build_message(cfg, target, hits)
                 if cfg.verbose:
                     print(text, flush=True)
@@ -648,17 +739,22 @@ def main():
                     continue
                 tg.send("이어서 빈자리를 지켜봅니다. 끄려면 /seatwatch off")
             elif state.seatwatch:
-                # 매진이던 회차에 자리가 나면 알린다
-                free_now = check_seats(cfg, fetcher, hits)
+                # 매진이던 회차에 자리가 나면 알린다.
+                # 직전에 0 으로 "확인된" 회차만 본다. 기록이 없는 회차(조회 실패 등)를
+                # 0 으로 치면, 원래 자리가 있던 회차도 새로 난 것처럼 알림이 간다.
+                free_now = check_seats(cfg, fetcher, hits, pump)
+                if target_changed[0]:
+                    continue                 # 조회 도중 날짜가 바뀌었다. 결과는 버린다
                 opened = [k for k, v in free_now.items()
-                          if v > 0 and free_before.get(k, 0) == 0]
+                          if v > 0 and free_before.get(k) == 0]
                 if opened:
                     log("빈자리 발생 %d건" % len(opened))
                     raise_alert(cfg, state, tg,
                                 "자리가 났습니다!\n날짜 %s (%s)\n\n%s\n\n%s"
                                 % (target.strftime("%Y%m%d"), WDAY[target.weekday()],
                                    "\n".join(format_items(hits)), cfg.site_url))
-                free_before = free_now
+                # 이번에 조회 못 한 회차는 직전 값을 유지한다
+                free_before = dict(free_before, **free_now)
 
         # trace 가 켜져 있으면 못 찾았을 때도 매 조회마다 한 줄씩 보고한다
         if state.trace_on():
@@ -683,6 +779,11 @@ def main():
         time.sleep(interval_for(cfg, datetime.now(KST)))
 
     log("이 세션의 실행 시간(%d분)이 끝났습니다. 다음 세션이 이어서 감시합니다." % cfg.max_run_min)
+    # 이어받기 없이 시간이 다 됐다는 건 다음 실행 요청이 계속 실패했다는 뜻이다
+    health.stop("ended(timeout)", checks)
+    tg.send("세션이 이어받기 없이 종료됐습니다. 다음 예약 실행까지 감시가 비어 있을 수 있습니다.\n"
+            "다음 실행 요청: %d회 시도, 마지막 %s"
+            % (health.relay["tries"], "성공" if health.relay["ok"] else "실패"))
     return 0
 
 

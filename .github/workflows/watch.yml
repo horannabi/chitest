@@ -21,7 +21,8 @@ on:
     - cron: "0 9 * * *"    # 18:00 KST
 
 permissions:
-  contents: write          # state.json 갱신
+  contents: write          # state.json 갱신, health 브랜치 기록
+  actions: write           # 세션이 스스로 다음 실행을 요청(workflow_dispatch)
 
 # 항상 하나만 돌게 한다. 새 실행이 뜨면 기존 것을 끊고 이어받으므로
 # 겹침도 공백도 생기지 않는다.
@@ -62,6 +63,14 @@ jobs:
           BURST_WINDOWS: ${{ vars.BURST_WINDOWS }}
           IDLE_SEC: ${{ vars.IDLE_SEC || '5' }}
           MAX_RUN_MIN: "355"
+          # 시작 후 이 분이 지나면 다음 실행을 스스로 요청해서 이어받게 한다.
+          # 테스트용으로 20분. 확인되면 늘려도 된다 (355 보다 작아야 함)
+          RELAY_AFTER_MIN: ${{ vars.RELAY_AFTER_MIN || '20' }}
+          HEALTH: ${{ vars.HEALTH || '1' }}          # 0 이면 생존 기록/외부 ping 끔
+          HEALTH_BEAT_SEC: ${{ vars.HEALTH_BEAT_SEC || '60' }}
+          GAP_ALERT_SEC: ${{ vars.GAP_ALERT_SEC || '120' }}
+          # 외부 감시 서비스(healthchecks.io 등) ping 주소. 없으면 ping 안 함
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
           NOTIFY_START: ${{ vars.NOTIFY_START || '0' }}
           VERBOSE: ${{ vars.VERBOSE || '0' }}
           FORCE: ${{ inputs.force && '1' || '0' }}

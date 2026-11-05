@@ -19,13 +19,51 @@
 
 import re
 
-SEAT_RE = re.compile(r"""<input[^>]*class=['"]([^'"]*)['"][^>]*>""")
 ID_RE = re.compile(r"""\bid=['"]([^'"]*)['"]""")
 SEATMAP_PATH = "/Popup/SeatChoiceSeatMap"
 
 # 잔여석이 이 수 이하이거나 매진인 회차만 좌석까지 들여다본다.
 # 여유가 많은 회차는 굳이 확인할 이유가 없다.
 LOOK_CLOSER_BELOW = 5
+
+
+SEAT_BASE = {"choose-seat", "choose-seat_large"}
+# 빈 일반 좌석에 붙어 있어도 되는 것으로 확인된 class. 이 밖의 class 가
+# 붙어 있으면 무슨 뜻인지 모르므로 빈자리로 세지 않는다.
+FREE_OK = SEAT_BASE | {"mini"}
+# class 가 아니라 속성으로 붙어 나오는 경우도 막는다 (예: disabled='disabled')
+ATTR_FLAG_RE = re.compile(r"""\s(checked|disabled)(?:\s*=|[\s/>])""")
+
+
+def seat_state(tag):
+    """
+    좌석 input 태그 하나 -> 'taken' / 'blocked' / 'special' / 'unknown' / 'free'.
+    좌석이 아니면 None.
+    """
+    cm = re.search(r"""class=['"]([^'"]*)['"]""", tag)
+    if not cm:
+        return None
+    names = set(cm.group(1).split())
+    if not names & SEAT_BASE:
+        return None
+    flags = set(ATTR_FLAG_RE.findall(tag))
+    if "checked" in names or "checked" in flags:
+        return "taken"
+    if "disabled" in names or "disabled" in flags:
+        return "blocked"
+    if "accessible" in names:
+        return "special"
+    if names - FREE_OK:
+        return "unknown"
+    return "free"
+
+
+def _seat_tags(html):
+    for m in re.finditer(r"<input[^>]*>", html):
+        tag = m.group(0)
+        st = seat_state(tag)
+        if st:
+            yield tag, st
 
 
 def count(html):
@@ -36,40 +74,24 @@ def count(html):
     taken        이미 나간 좌석
     blocked      고를 수 없는 좌석
     free_special 비어 있는 특정 좌석 (따로 세는 것)
+    unknown      모르는 표시가 붙은 좌석 (빈자리로 세지 않음)
     free         비어 있는 일반 좌석  <- 우리가 보고 싶은 숫자
     """
-    total = taken = blocked = free_special = free = 0
-    for cls in SEAT_RE.findall(html):
-        names = cls.split()
-        if "choose-seat" not in names and "choose-seat_large" not in names:
-            continue
-        total += 1
-        if "checked" in names:
-            taken += 1
-            continue
-        if "disabled" in names:
-            blocked += 1
-            continue
-        if "accessible" in names:
-            free_special += 1
-            continue
-        free += 1
-    return {"total": total, "taken": taken, "blocked": blocked,
-            "free_special": free_special, "free": free}
+    c = {"total": 0, "taken": 0, "blocked": 0, "free_special": 0,
+         "unknown": 0, "free": 0}
+    key = {"taken": "taken", "blocked": "blocked", "special": "free_special",
+           "unknown": "unknown", "free": "free"}
+    for _tag, st in _seat_tags(html):
+        c["total"] += 1
+        c[key[st]] += 1
+    return c
 
 
 def free_labels(html, limit=12):
     """비어 있는 일반 좌석의 이름(A3 같은)을 몇 개만 뽑는다."""
     out = []
-    for m in re.finditer(r"<input[^>]*>", html):
-        tag = m.group(0)
-        cm = re.search(r"""class=['"]([^'"]*)['"]""", tag)
-        if not cm:
-            continue
-        names = cm.group(1).split()
-        if "choose-seat" not in names and "choose-seat_large" not in names:
-            continue
-        if {"checked", "disabled", "accessible"} & set(names):
+    for tag, st in _seat_tags(html):
+        if st != "free":
             continue
         im = ID_RE.search(tag)
         if im:
@@ -77,6 +99,20 @@ def free_labels(html, limit=12):
         if len(out) >= limit:
             break
     return out
+
+
+def free_tags(html, limit=3):
+    """빈자리로 판정한 좌석 태그 원문. 판정이 의심스러울 때 로그로 남기기 위한 것."""
+    return [tag for tag, st in _seat_tags(html) if st == "free"][:limit]
+
+
+def list_count(note):
+    """목록의 잔여 표시 -> 남은 수. '매진'이면 0, 해석 못 하면 None."""
+    note = (note or "").strip()
+    if "매진" in note:
+        return 0
+    m = re.match(r"^(\d+)\s*/\s*(\d+)$", note)
+    return int(m.group(1)) if m else None
 
 
 def needs_closer_look(note):

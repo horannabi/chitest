@@ -34,6 +34,8 @@ HELP = """사용법
 /now              찾는 것만 바로 확인
 /nowall           그날 전체 목록 확인
 /status           현재 감시 상태
+/health           세션 생존/이어받기/감시 공백 기록
+/health off       생존 기록·외부 ping 끄기 (/health on 으로 켜기)
 /seatwatch on     찾은 뒤에도 자리 나는지 계속 지켜보기
 /seatwatch off    끄기
 /trace on         매 조회마다 한 줄씩 보고 (5분 뒤 자동 종료)
@@ -103,6 +105,7 @@ class State:
         self.tg_offset = 0          # 처리한 텔레그램 update_id
         self.trace_until = None     # datetime | None. 이 시각까지 매 조회를 보고
         self.seatwatch = False      # 찾은 뒤에도 자리가 나는지 계속 지켜볼지
+        self.health_off = False     # True 면 생존 기록/외부 ping 을 하지 않는다 (/health off)
 
         # 읽음 확인(/ok) 을 받을 때까지 알림을 반복한다.
         # 본문은 저장소에 남기지 않는다. 실행 중에는 메모리에 들고 있고,
@@ -135,6 +138,7 @@ class State:
         self.tg_offset = int(data.get("tg_offset") or 0)
 
         self.seatwatch = bool(data.get("seatwatch"))
+        self.health_off = bool(data.get("health_off"))
 
         raw = data.get("ack_date")
         self.ack_date = parse_date(str(raw)) if raw else None
@@ -213,6 +217,7 @@ class State:
             "target_date": self.target.strftime("%Y%m%d") if self.target else None,
             "tg_offset": self.tg_offset,
             "seatwatch": self.seatwatch,
+            "health_off": self.health_off,
             "ack_date": self.ack_date.strftime("%Y%m%d") if self.ack_date else None,
             "ack_count": self.ack_count,
             "trace_until": (self.trace_until.strftime("%Y-%m-%d %H:%M:%S")
@@ -272,10 +277,19 @@ class Telegram:
     def _url(self, method):
         return "https://api.telegram.org/bot%s/%s" % (self.token, method)
 
+    # 텔레그램 메시지 한 통의 최대 길이는 4096자. 여유를 두고 자른다.
+    MAX_LEN = 4000
+
     def send(self, text):
         if not self.enabled:
             log("(텔레그램 미설정) " + text.replace("\n", " / ")[:200])
             return False
+        ok = True
+        for part in self._split(text):
+            ok = self._send_one(part) and ok
+        return ok
+
+    def _send_one(self, text):
         try:
             r = requests.post(self._url("sendMessage"),
                               data={"chat_id": self.chat_id, "text": text}, timeout=20)
@@ -286,6 +300,28 @@ class Telegram:
             log("텔레그램 전송 실패 %s: %s" % (r.status_code, r.text[:200]))
             return False
         return True
+
+    @classmethod
+    def _split(cls, text):
+        """길면 줄 경계에서 나눈다. 한 줄이 너무 길면 그 줄은 글자 수로 자른다."""
+        if len(text) <= cls.MAX_LEN:
+            return [text]
+        parts, cur = [], ""
+        for line in text.split("\n"):
+            while len(line) > cls.MAX_LEN:
+                if cur:
+                    parts.append(cur)
+                    cur = ""
+                parts.append(line[:cls.MAX_LEN])
+                line = line[cls.MAX_LEN:]
+            if cur and len(cur) + 1 + len(line) > cls.MAX_LEN:
+                parts.append(cur)
+                cur = line
+            else:
+                cur = (cur + "\n" + line) if cur else line
+        if cur:
+            parts.append(cur)
+        return parts
 
     def poll(self, offset):
         """새 명령을 [(update_id, 본문), ...] 로 반환."""
@@ -318,10 +354,11 @@ class Telegram:
 
 # ---------------------------------------------------------------- 명령 처리
 
-def handle_command(text, state, tg, status_fn, now_fn):
+def handle_command(text, state, tg, status_fn, now_fn, health_fn=None):
     """
     명령 하나를 처리한다.
     status_fn() -> 상태 문자열, now_fn(날짜|None) -> 즉시 조회 결과 문자열
+    health_fn() -> 세션 생존/이어받기 상태 문자열
     반환값: 감시 대상 날짜가 바뀌었으면 True
     """
     cmd = text.strip()
@@ -331,6 +368,17 @@ def handle_command(text, state, tg, status_fn, now_fn):
 
     if head in ("/help", "help", "/start"):
         tg.send(HELP)
+        return False
+
+    if head in ("/health", "health"):
+        sw = (arg or "").lower().strip()
+        if sw in ("on", "off"):
+            state.health_off = (sw == "off")
+            state.save("health %s" % sw)
+            tg.send("health 기록과 외부 ping 을 %s.\n(다음 실행 요청/이어받기는 계속 동작합니다)"
+                    % ("껐습니다" if state.health_off else "켰습니다"))
+            return False
+        tg.send(health_fn() if health_fn else "health 기록이 꺼져 있습니다.")
         return False
 
     if head in ("/status", "status"):
