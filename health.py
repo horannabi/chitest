@@ -73,6 +73,7 @@ class Health:
         self.gap_sec = None            # 이번 세션 시작 시 잰 감시 공백
         self.prev_run = None
         self.relay = {"requested_at": None, "ok": None, "tries": 0}
+        self._gap_retry = 0            # 이전 실행 종료 시각을 다시 조회할 남은 횟수
         self._sha = {}                 # 파일별 sha
 
     # ------------------------------------------------------------ 시작/종료
@@ -93,19 +94,31 @@ class Health:
         prev = self._read_json("health.json") or {}
         prev_seen = parse(prev.get("last_seen"))
         self.prev_run = prev.get("run_id")
-        if prev_seen:
-            self.gap_sec = int((self.started - prev_seen).total_seconds())
 
-        if prev_seen is None:
-            msg = "세션 시작 run=%s (%s). 이전 기록 없음" % (self.run_id, self.run_event)
-        else:
+        # 1순위: Actions 기록에서 이전 실행의 watch.py 단계가 실제로 끝난 시각.
+        # 이어받기로 끊길 때는 종료 기록을 남기지 못해서(11-05 실측) 생존 기록만으로는
+        # 최대 beat_sec 만큼 공백이 부풀려진다.
+        ended, conclusion = self._prev_step_end(self.prev_run)
+
+        if ended:
+            self.gap_sec = int((self.started - ended).total_seconds())
+            msg = ("세션 시작 run=%s (%s). 이전 run=%s 종료 %s (%s) -> 공백 %d초 (Actions 기록 기준)"
+                   % (self.run_id, self.run_event, self.prev_run,
+                      fmt(ended), conclusion or "?", self.gap_sec))
+        elif prev_seen:
+            # 2순위: 마지막 생존 기록
+            self.gap_sec = int((self.started - prev_seen).total_seconds())
             how = prev.get("status") or "?"
             msg = ("세션 시작 run=%s (%s). 이전 run=%s 마지막 생존 %s (%s) -> 공백 %d초"
                    % (self.run_id, self.run_event, self.prev_run,
                       prev.get("last_seen"), how, self.gap_sec))
             if how == "running":
                 # 이전 세션이 끝 인사 없이 끊겼다. 실제 공백은 이보다 최대 beat_sec 짧다.
-                msg += " (이전 세션이 기록 없이 끊김. 오차 최대 %d초)" % self.beat_sec
+                msg += (" (Actions 기록 아직 없음, 생존 기록 기준. 오차 최대 %d초. 나중에 재계산)"
+                        % self.beat_sec)
+            self._gap_retry = 5              # 이후 생존 기록 때 Actions 기록을 다시 본다
+        else:
+            msg = "세션 시작 run=%s (%s). 이전 기록 없음" % (self.run_id, self.run_event)
         self.event(msg)
         self.beat(force=True)
         return self.gap_sec
@@ -128,6 +141,7 @@ class Health:
         self._ping()
         if not self.enabled:
             return
+        self._retry_gap()
         data = {
             "status": status,
             "run_id": self.run_id,
@@ -233,6 +247,47 @@ class Health:
         return ok
 
     # ------------------------------------------------------------ GitHub API
+
+    def _prev_step_end(self, run_id):
+        """
+        이전 실행에서 'python watch.py' 단계가 끝난 시각(KST)과 결과를 돌려준다.
+        아직 종료 처리 전이거나 조회에 실패하면 (None, None).
+        기다리지 않는다. 감시 시작이 늦어지면 그만큼 공백이 늘기 때문이다.
+        """
+        if not run_id or not str(run_id).isdigit() or str(run_id) == str(self.run_id):
+            return None, None
+        try:
+            r = requests.get((API % self.repo) + "/actions/runs/%s/jobs" % run_id,
+                             headers=self._headers(), timeout=20)
+            if r.status_code != 200:
+                log("health: 이전 실행 조회 실패 %s" % r.status_code)
+                return None, None
+            for job in r.json().get("jobs", []):
+                for step in job.get("steps", []):
+                    if "watch.py" not in (step.get("name") or ""):
+                        continue
+                    done = step.get("completed_at")
+                    if done:
+                        t = datetime.strptime(done, "%Y-%m-%dT%H:%M:%SZ")
+                        return (t.replace(tzinfo=timezone.utc).astimezone(KST),
+                                step.get("conclusion"))
+        except (requests.RequestException, ValueError) as e:
+            log("health: 이전 실행 조회 예외: %s" % str(e)[:120])
+        return None, None
+
+    def _retry_gap(self):
+        """시작 때 못 구한 이전 실행 종료 시각을 다시 조회해 공백을 고쳐 기록한다."""
+        if self._gap_retry <= 0:
+            return
+        self._gap_retry -= 1
+        ended, conclusion = self._prev_step_end(self.prev_run)
+        if not ended:
+            return
+        self._gap_retry = 0
+        old = self.gap_sec
+        self.gap_sec = int((self.started - ended).total_seconds())
+        self.event("공백 재계산: 이전 run=%s 종료 %s (%s) -> %d초 (Actions 기록 기준, 처음 계산 %s초)"
+                   % (self.prev_run, fmt(ended), conclusion or "?", self.gap_sec, old))
 
     def _headers(self):
         return {"Authorization": "Bearer %s" % self.token,
