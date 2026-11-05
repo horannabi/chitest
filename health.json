@@ -3,14 +3,14 @@
   "run_id": "42112460546",
   "run_event": "schedule",
   "started": "2026-11-06 06:26:34",
-  "last_seen": "2026-11-06 08:26:37",
-  "checks": 665,
+  "last_seen": "2026-11-06 08:27:44",
+  "checks": 671,
   "gap_at_start_sec": 11,
   "prev_run": "42111598654",
   "relay": {
-    "requested_at": null,
-    "ok": null,
-    "tries": 0
+    "requested_at": "2026-11-06 08:26:38",
+    "ok": true,
+    "tries": 1
   },
   "error_count": 0,
   "last_error": null
