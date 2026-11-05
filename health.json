@@ -1,16 +1,16 @@
 {
   "status": "running",
-  "run_id": "42073166967",
-  "run_event": "schedule",
-  "started": "2026-11-06 02:18:17",
-  "last_seen": "2026-11-06 04:18:54",
-  "checks": 678,
-  "gap_at_start_sec": 10,
-  "prev_run": "42060262405",
+  "run_id": "42092597781",
+  "run_event": "workflow_dispatch",
+  "started": "2026-11-06 04:19:27",
+  "last_seen": "2026-11-06 04:19:30",
+  "checks": 0,
+  "gap_at_start_sec": 11,
+  "prev_run": "42073166967",
   "relay": {
-    "requested_at": "2026-11-06 04:18:20",
-    "ok": true,
-    "tries": 1
+    "requested_at": null,
+    "ok": null,
+    "tries": 0
   },
   "error_count": 0,
   "last_error": null
