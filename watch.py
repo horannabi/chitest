@@ -400,10 +400,88 @@ def format_items(items):
     return lines
 
 
+def slot_key(item, group, slot):
+    """
+    회차를 구분하는 키. 사람이 보는 기준(영화명, 관, 시간)으로 만든다.
+    사이트 ID(screenplanid)는 시간표가 다시 올라갈 때도 유지되는지 확인되지
+    않았고, 우회로(markdown)로 받으면 아예 없어서 판단 기준으로는 쓰지 않는다.
+    대신 observe_slots 에서 그 ID 가 고정 키로 믿을 만한지 계속 검증한다.
+    """
+    return "%s|%s|%s" % (item["name"], group["name"], slot["time"])
+
+
+def observe_slots(state, items):
+    """
+    이번 조회의 회차 전체를 state.slot_ids 와 비교한다.
+
+    반환: (새 회차 키 목록, 이상 설명 목록, state 가 바뀌었는지)
+      - 처음 보는 날짜(기록이 비어 있음)면 전부 기준으로 삼고 새 회차로 치지 않는다.
+      - screenplanid 검증: 같은 회차인데 ID 가 바뀜 / 같은 ID 인데 회차 정보가 바뀜 /
+        한 번의 조회 안에서 ID 가 겹침 -> 이상으로 보고한다.
+    """
+    seen = {}
+    anomalies = []
+    for it in items:
+        for g in it["groups"]:
+            for s in g["slots"]:
+                k = slot_key(it, g, s)
+                sid = str((s.get("attrs") or {}).get("screenplanid") or "")
+                if k in seen and sid and seen[k] and seen[k] != sid:
+                    anomalies.append("같은 회차에 ID 두 개: %s (%s, %s)" % (k, seen[k], sid))
+                seen[k] = sid or seen.get(k, "")
+
+    by_id = {}
+    for k, sid in seen.items():
+        if not sid:
+            continue
+        if sid in by_id and by_id[sid] != k:
+            anomalies.append("한 ID(%s)에 회차 두 개: %s / %s" % (sid, by_id[sid], k))
+        by_id[sid] = k
+
+    old = state.slot_ids
+    old_by_id = {v: k for k, v in old.items() if v}
+    for k, sid in seen.items():
+        if not sid:
+            continue
+        if old.get(k) and old[k] != sid:
+            anomalies.append("같은 회차의 ID 변경: %s  %s -> %s" % (k, old[k], sid))
+        elif sid in old_by_id and old_by_id[sid] != k:
+            anomalies.append("같은 ID(%s)의 회차 정보 변경: %s -> %s" % (sid, old_by_id[sid], k))
+
+    baseline = not old
+    new_keys = [] if baseline else [k for k in seen if k not in old]
+
+    merged = dict(old)
+    for k, sid in seen.items():
+        if sid or k not in merged:
+            merged[k] = sid
+    changed = merged != old
+    state.slot_ids = merged
+    if state.id_since is None and any(seen.values()):
+        state.id_since = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
+        changed = True
+    return new_keys, anomalies, changed
+
+
+def only_slots(items, keys):
+    """items 에서 keys 에 해당하는 회차만 남긴 사본."""
+    keys = set(keys)
+    out = []
+    for it in items:
+        groups = []
+        for g in it["groups"]:
+            slots = [s for s in g["slots"] if slot_key(it, g, s) in keys]
+            if slots:
+                groups.append(dict(g, slots=slots))
+        if groups:
+            out.append(dict(it, groups=groups))
+    return out
+
+
 def check_seats(cfg, fetcher, items, pump=None):
     """
     목록상 매진이거나 잔여가 적은 회차만 좌석까지 들여다본다.
-    각 회차에 seat_note 를 붙이고, {회차키: 일반 빈자리수} 를 돌려준다.
+    각 회차에 seat_note 를 붙이고, {회차키(slot_key): 일반 빈자리수} 를 돌려준다.
 
     좌석까지 보지 않은 회차(잔여가 넉넉한 회차)는 목록의 잔여수를 그대로 넣는다.
     그래야 매진이던 회차가 한꺼번에 많이 풀린 경우도 비교할 수 있다.
@@ -418,15 +496,15 @@ def check_seats(cfg, fetcher, items, pump=None):
         for g in it["groups"]:
             for s in g["slots"]:
                 attrs = s.get("attrs") or {}
-                key = attrs.get("screenplanid")
+                key = slot_key(it, g, s)
                 note = s.get("note")
                 if not seats.needs_closer_look(note):
                     n = seats.list_count(note)
-                    if key and n is not None:
+                    if n is not None:
                         result[key] = n
                     continue
-                if not key:
-                    continue
+                if not attrs.get("screenplanid"):
+                    continue                 # 좌석 조회에는 사이트 ID 가 필요하다
                 if pump:
                     pump()
                 html = seats.fetch(fetcher.sess, origin, attrs)
@@ -615,8 +693,36 @@ def main():
     checks = 0
     last_count = None
     last_reason = None
-    announced = False        # 편성 발견을 이미 알렸는지
-    free_before = {}         # 회차별 직전 빈자리 수
+    def ymd(d):
+        return d.strftime("%Y%m%d") if d else None
+
+    # 편성 발견을 이미 알렸는지, 회차별 직전 빈자리 수.
+    # 이전 세션에서 이어받는다. 안 그러면 이어받을 때마다 "찾았습니다" 를 다시 보낸다.
+    # 빈자리 수는 0 으로 확인된 회차만 저장해 둔다 (자리가 나는지 볼 대상은 그것뿐이고,
+    # 다른 회차 숫자까지 저장하면 표가 팔릴 때마다 커밋이 생긴다).
+    announced = state.target is not None and state.announced == ymd(state.target)
+    free_before = {k: 0 for k in state.zero_slots} if announced else {}
+    if announced:
+        log("이전 세션에서 이미 알린 날짜입니다. 매진 회차 %d개를 이어서 지켜봅니다."
+            % len(state.zero_slots))
+
+    id_compares = 0          # 이번 세션에서 screenplanid 를 비교한 조회 횟수
+
+    def id_check_lines():
+        """/health 에 붙일 screenplanid 검증 현황."""
+        if not state.id_since:
+            return ["회차 ID 검증: 아직 시작 전 (ID 가 있는 조회가 없었음)"]
+        return ["회차 ID 검증: %s 부터 / 이상 %d건 / 이번 세션 비교 %d회 / 기록된 회차 %d개"
+                % (state.id_since, state.id_anomalies, id_compares, len(state.slot_ids))]
+    health.extra_fn = id_check_lines
+
+    def remember_zero():
+        """0 으로 확인된 회차 목록을 state 에 반영. 바뀌었으면 True."""
+        z = {k for k, v in free_before.items() if v == 0}
+        if z == state.zero_slots:
+            return False
+        state.zero_slots = z
+        return True
 
     def status_text():
         _ok, why = should_watch(cfg, state.target, datetime.now(KST))
@@ -683,6 +789,11 @@ def main():
             checks = 0
             announced = False
             free_before = {}
+            if state.announced or state.zero_slots or state.slot_ids:
+                state.announced = None
+                state.zero_slots = set()
+                state.slot_ids = {}          # 회차 기록은 날짜별이다. ID 검증 누적치는 유지
+                state.save("reset progress")
 
         # ---- 미확인 알림 반복 전송
         resend_alert(cfg, state, tg, fetcher)
@@ -719,6 +830,21 @@ def main():
 
         items = parse(body, fmt)
 
+        # ---- 회차 기록 갱신 + screenplanid 검증
+        new_keys, anomalies, slots_changed = observe_slots(state, items)
+        if any((s.get("attrs") or {}).get("screenplanid")
+               for it in items for g in it["groups"] for s in g["slots"]):
+            id_compares += 1
+        if anomalies:
+            state.id_anomalies += len(anomalies)
+            for a in anomalies:
+                health.event("[ID 검증] " + a)
+            tg.send("[회차 ID 검증] 이상 %d건 (누적 %d건)\n\n%s"
+                    % (len(anomalies), state.id_anomalies, "\n".join(anomalies[:20])))
+            slots_changed = True
+        if slots_changed:
+            state.save("slots %d" % len(state.slot_ids))
+
         if contains_keyword(body, cfg.keywords):
             hits = match_keywords(items, cfg.keywords)
 
@@ -732,7 +858,9 @@ def main():
                 if cfg.verbose:
                     print(text, flush=True)
                 announced = True
-                raise_alert(cfg, state, tg, text)
+                state.announced = ymd(target)
+                remember_zero()
+                raise_alert(cfg, state, tg, text)   # 여기서 state 가 같이 저장된다
                 if not state.seatwatch:
                     state.target = None      # 감시는 끝. 확인 받을 때까지 재전송만 한다
                     state.save("done")
@@ -747,14 +875,30 @@ def main():
                     continue                 # 조회 도중 날짜가 바뀌었다. 결과는 버린다
                 opened = [k for k, v in free_now.items()
                           if v > 0 and free_before.get(k) == 0]
+                # 이번에 조회 못 한 회차는 직전 값을 유지한다
+                free_before = dict(free_before, **free_now)
+                zero_changed = remember_zero()
+
+                # 찾는 항목에 회차가 새로 생겼으면 알린다
+                hit_keys = {slot_key(it, g, s) for it in hits
+                            for g in it["groups"] for s in g["slots"]}
+                added = [k for k in new_keys if k in hit_keys]
+                if added:
+                    log("회차 추가 %d건" % len(added))
+                    raise_alert(cfg, state, tg,     # 여기서 state 가 같이 저장된다
+                                "회차가 추가됐습니다!\n날짜 %s (%s)\n\n%s\n\n%s"
+                                % (target.strftime("%Y%m%d"), WDAY[target.weekday()],
+                                   "\n".join(format_items(only_slots(hits, added))),
+                                   cfg.site_url))
+
                 if opened:
                     log("빈자리 발생 %d건" % len(opened))
-                    raise_alert(cfg, state, tg,
+                    raise_alert(cfg, state, tg,     # 여기서 state 가 같이 저장된다
                                 "자리가 났습니다!\n날짜 %s (%s)\n\n%s\n\n%s"
                                 % (target.strftime("%Y%m%d"), WDAY[target.weekday()],
                                    "\n".join(format_items(hits)), cfg.site_url))
-                # 이번에 조회 못 한 회차는 직전 값을 유지한다
-                free_before = dict(free_before, **free_now)
+                elif zero_changed and not added:
+                    state.save("zero slots %d" % len(state.zero_slots))
 
         # trace 가 켜져 있으면 못 찾았을 때도 매 조회마다 한 줄씩 보고한다
         if state.trace_on():

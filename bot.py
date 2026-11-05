@@ -106,6 +106,16 @@ class State:
         self.trace_until = None     # datetime | None. 이 시각까지 매 조회를 보고
         self.seatwatch = False      # 찾은 뒤에도 자리가 나는지 계속 지켜볼지
         self.health_off = False     # True 면 생존 기록/외부 ping 을 하지 않는다 (/health off)
+        # 세션이 바뀌어도 이어가야 하는 진행 상황.
+        # 메모리에만 두면 이어받을 때마다 "찾았습니다" 를 다시 보내게 된다.
+        self.announced = None       # "YYYYMMDD" | None. 편성 발견을 이미 알린 날짜
+        self.zero_slots = set()     # 좌석 0 으로 확인된 회차 키. 여기서 자리가 나면 알린다
+        # 그날 본 회차 전체. 회차 키("영화명|관|시간") -> screenplanid ("" = 모름).
+        # 여기 없는 회차가 나타나면 새 회차로 본다.
+        self.slot_ids = {}
+        # screenplanid 가 회차 고유 키로 믿을 만한지 검증한 기록
+        self.id_since = None        # 검증을 시작한 시각 문자열
+        self.id_anomalies = 0       # 지금까지 발견한 이상 건수
 
         # 읽음 확인(/ok) 을 받을 때까지 알림을 반복한다.
         # 본문은 저장소에 남기지 않는다. 실행 중에는 메모리에 들고 있고,
@@ -139,6 +149,11 @@ class State:
 
         self.seatwatch = bool(data.get("seatwatch"))
         self.health_off = bool(data.get("health_off"))
+        self.announced = data.get("announced") or None
+        self.zero_slots = set(str(k) for k in (data.get("zero_slots") or []))
+        self.slot_ids = {str(k): str(v or "") for k, v in (data.get("slot_ids") or {}).items()}
+        self.id_since = data.get("id_since") or None
+        self.id_anomalies = int(data.get("id_anomalies") or 0)
 
         raw = data.get("ack_date")
         self.ack_date = parse_date(str(raw)) if raw else None
@@ -218,6 +233,11 @@ class State:
             "tg_offset": self.tg_offset,
             "seatwatch": self.seatwatch,
             "health_off": self.health_off,
+            "announced": self.announced,
+            "zero_slots": sorted(self.zero_slots),
+            "slot_ids": dict(sorted(self.slot_ids.items())),
+            "id_since": self.id_since,
+            "id_anomalies": self.id_anomalies,
             "ack_date": self.ack_date.strftime("%Y%m%d") if self.ack_date else None,
             "ack_count": self.ack_count,
             "trace_until": (self.trace_until.strftime("%Y-%m-%d %H:%M:%S")

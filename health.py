@@ -62,6 +62,8 @@ class Health:
         # False 면 기록(health 브랜치)과 외부 ping 을 하지 않는다. /health off 로 끈다.
         # 다음 실행 요청(request_next)은 이 값과 무관하게 동작한다.
         self.active = True
+        # /health 응답 끝에 덧붙일 줄을 돌려주는 함수 (회차 ID 검증 현황 등)
+        self.extra_fn = None
 
         self.started = now_kst()
         self.last_beat = None          # 마지막으로 health.json 을 쓴 시각
@@ -190,6 +192,11 @@ class Health:
         out.append("외부 ping: %s" % (
             "꺼짐" if not self.ping_url
             else (self.last_ping.strftime("%H:%M:%S") if self.last_ping else "아직")))
+        if self.extra_fn:
+            try:
+                out.extend(self.extra_fn())
+            except Exception as e:            # 부가 정보 때문에 응답이 막히면 안 된다
+                out.append("(부가 정보 오류: %s)" % str(e)[:100])
         if self.enabled:
             out.append("기록: https://github.com/%s/tree/%s" % (self.repo, self.branch))
         return "\n".join(out)
