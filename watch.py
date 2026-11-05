@@ -400,31 +400,40 @@ def format_items(items):
     return lines
 
 
+def slot_label(item, group, slot):
+    """사람이 보는 회차 표기 (영화명|관|시간). 알림 문구와 ID 검증 기록에 쓴다."""
+    return "%s|%s|%s" % (item["name"], group["name"], slot["time"])
+
+
 def slot_key(item, group, slot):
     """
-    회차를 구분하는 키. 사람이 보는 기준(영화명, 관, 시간)으로 만든다.
-    사이트 ID(screenplanid)는 시간표가 다시 올라갈 때도 유지되는지 확인되지
-    않았고, 우회로(markdown)로 받으면 아예 없어서 판단 기준으로는 쓰지 않는다.
-    대신 observe_slots 에서 그 ID 가 고정 키로 믿을 만한지 계속 검증한다.
+    회차를 구분하는 키. 사이트 ID(screenplanid)가 있으면 그것으로, 없으면
+    (우회로 markdown 으로 받은 경우) 영화명|관|시간 으로 만든다.
+
+    2026-11-05 20:32 극장이 여러 회차 시간을 5분씩 당겼을 때 ID 는 그대로였다.
+    시간으로 구분하면 그때마다 같은 회차를 새 회차로 보고, 직전 0석 기록도 끊긴다.
+    ID 가 계속 고정인지는 observe_slots 에서 계속 검증한다.
     """
-    return "%s|%s|%s" % (item["name"], group["name"], slot["time"])
+    sid = str((slot.get("attrs") or {}).get("screenplanid") or "")
+    return ("id:" + sid) if sid else slot_label(item, group, slot)
 
 
 def observe_slots(state, items):
     """
-    이번 조회의 회차 전체를 state.slot_ids 와 비교한다.
+    이번 조회의 회차 전체를 state.slot_ids ({표기: ID}) 와 비교한다.
 
-    반환: (새 회차 키 목록, 이상 설명 목록, state 가 바뀌었는지)
+    반환: (새 회차 키 목록, 이상 설명 목록, 회차 정보 변경 목록, state 가 바뀌었는지)
       - 처음 보는 날짜(기록이 비어 있음)면 전부 기준으로 삼고 새 회차로 치지 않는다.
-      - screenplanid 검증: 같은 회차인데 ID 가 바뀜 / 같은 ID 인데 회차 정보가 바뀜 /
-        한 번의 조회 안에서 ID 가 겹침 -> 이상으로 보고한다.
+      - 같은 ID 인데 시간 등 표기가 바뀐 것은 이상이 아니라 "변경"으로 돌려준다.
+        예전 표기는 기록에서 지워서 같은 변경을 다시 보고하지 않는다.
+      - 이상: 같은 표기인데 ID 가 바뀜 / 한 번의 조회 안에서 ID 가 겹침.
     """
     seen = {}
     anomalies = []
     for it in items:
         for g in it["groups"]:
             for s in g["slots"]:
-                k = slot_key(it, g, s)
+                k = slot_label(it, g, s)
                 sid = str((s.get("attrs") or {}).get("screenplanid") or "")
                 if k in seen and sid and seen[k] and seen[k] != sid:
                     anomalies.append("같은 회차에 ID 두 개: %s (%s, %s)" % (k, seen[k], sid))
@@ -439,19 +448,37 @@ def observe_slots(state, items):
         by_id[sid] = k
 
     old = state.slot_ids
-    old_by_id = {v: k for k, v in old.items() if v}
+    old_labels = {}                          # ID -> 그 ID 로 기록된 표기들
+    for k, v in old.items():
+        if v:
+            old_labels.setdefault(v, []).append(k)
+
+    changes = []
+    merged = dict(old)
     for k, sid in seen.items():
         if not sid:
             continue
         if old.get(k) and old[k] != sid:
             anomalies.append("같은 회차의 ID 변경: %s  %s -> %s" % (k, old[k], sid))
-        elif sid in old_by_id and old_by_id[sid] != k:
-            anomalies.append("같은 ID(%s)의 회차 정보 변경: %s -> %s" % (sid, old_by_id[sid], k))
+        prev = [p for p in old_labels.get(sid, []) if p != k]
+        if prev and k not in old_labels.get(sid, []):
+            changes.append("%s -> %s" % (prev[0], k))
+        for p in prev:
+            if merged.get(p) == sid:
+                del merged[p]                # 같은 ID 의 예전 표기는 지운다
 
     baseline = not old
-    new_keys = [] if baseline else [k for k in seen if k not in old]
+    new_keys = []
+    if not baseline:
+        for it in items:
+            for g in it["groups"]:
+                for s in g["slots"]:
+                    k = slot_label(it, g, s)
+                    sid = seen.get(k, "")
+                    known = (k in old) or (sid and sid in old_labels)
+                    if not known:
+                        new_keys.append(slot_key(it, g, s))
 
-    merged = dict(old)
     for k, sid in seen.items():
         if sid or k not in merged:
             merged[k] = sid
@@ -460,7 +487,7 @@ def observe_slots(state, items):
     if state.id_since is None and any(seen.values()):
         state.id_since = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
         changed = True
-    return new_keys, anomalies, changed
+    return new_keys, anomalies, changes, changed
 
 
 def only_slots(items, keys):
@@ -701,6 +728,12 @@ def main():
     # 빈자리 수는 0 으로 확인된 회차만 저장해 둔다 (자리가 나는지 볼 대상은 그것뿐이고,
     # 다른 회차 숫자까지 저장하면 표가 팔릴 때마다 커밋이 생긴다).
     announced = state.target is not None and state.announced == ymd(state.target)
+    # 예전 버전은 매진 회차를 "영화명|관|시간" 으로 저장했다. ID 를 알면 ID 키로 옮긴다
+    migrated = {("id:" + state.slot_ids[k]) if state.slot_ids.get(k) else k
+                for k in state.zero_slots}
+    if migrated != state.zero_slots:
+        state.zero_slots = migrated
+        state.save("zero slots by id")
     free_before = {k: 0 for k in state.zero_slots} if announced else {}
     if announced:
         log("이전 세션에서 이미 알린 날짜입니다. 매진 회차 %d개를 이어서 지켜봅니다."
@@ -831,7 +864,13 @@ def main():
         items = parse(body, fmt)
 
         # ---- 회차 기록 갱신 + screenplanid 검증
-        new_keys, anomalies, slots_changed = observe_slots(state, items)
+        new_keys, anomalies, slot_changes, slots_changed = observe_slots(state, items)
+        if slot_changes:
+            # 같은 ID 인 회차의 시간 등이 바뀌었다. 이상은 아니고 한 번만 알린다
+            for c in slot_changes:
+                health.event("[회차 변경] " + c)
+            tg.send("[회차 정보 변경] %d건 (같은 회차 ID, 시간 등 변경)\n\n%s"
+                    % (len(slot_changes), "\n".join(slot_changes[:30])))
         if any((s.get("attrs") or {}).get("screenplanid")
                for it in items for g in it["groups"] for s in g["slots"]):
             id_compares += 1
