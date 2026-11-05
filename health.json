@@ -3,14 +3,14 @@
   "run_id": "41972701647",
   "run_event": "workflow_dispatch",
   "started": "2026-11-05 14:15:27",
-  "last_seen": "2026-11-05 14:34:41",
-  "checks": 108,
+  "last_seen": "2026-11-05 14:35:47",
+  "checks": 114,
   "gap_at_start_sec": 8,
   "prev_run": "41970470039",
   "relay": {
-    "requested_at": null,
-    "ok": null,
-    "tries": 0
+    "requested_at": "2026-11-05 14:35:34",
+    "ok": true,
+    "tries": 1
   },
   "error_count": 0,
   "last_error": null
