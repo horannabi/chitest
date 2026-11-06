@@ -218,14 +218,32 @@ class Fetcher:
         self.sess.headers.update({
             "User-Agent": UA,
             "Accept-Language": "ko-KR,ko;q=0.9",
+            # 중간 캐시가 낡은 목록을 돌려주지 않게 한다.
+            # 11-06 실측: 좌석을 취소해 웹에서는 26석이 됐는데, 봇은 한참 뒤에도
+            # 22석으로 고정이었다. 캐시 지정이 아예 없었다.
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
         })
         if cfg.site_url:
             self.sess.headers["Referer"] = cfg.site_url
         self.use_proxy = False
         self.direct_fail = 0
 
+    _seq = 0            # 같은 밀리초에 두 번 불려도 주소가 겹치지 않게 하는 순번
+
+    @classmethod
+    def _bust(cls, url):
+        """
+        조회할 때마다 주소를 다르게 만든다. 캐시 방지 헤더만으로는 중간 캐시가
+        낡은 응답을 돌려주는 것을 못 막는 경우가 있다.
+        사이트는 모르는 파라미터를 무시하므로 결과는 달라지지 않는다.
+        """
+        cls._seq = (cls._seq + 1) % 1000
+        sep = "&" if "?" in url else "?"
+        return "%s%s_=%d%03d" % (url, sep, int(time.time() * 1000), cls._seq)
+
     def fetch(self, target):
-        url = self.cfg.url_for(target)
+        url = self._bust(self.cfg.url_for(target))
 
         if not self.use_proxy:
             text = self._direct(url)
