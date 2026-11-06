@@ -69,6 +69,14 @@ jobs:
           HEALTH: ${{ vars.HEALTH || '1' }}          # 0 이면 생존 기록/외부 ping 끔
           HEALTH_BEAT_SEC: ${{ vars.HEALTH_BEAT_SEC || '60' }}
           GAP_ALERT_SEC: ${{ vars.GAP_ALERT_SEC || '120' }}
+          # 루프가 한 단계에서 이 초만큼 진행이 없으면 멈춘 것으로 보고
+          # 메인 스레드 스택을 텔레그램과 health.json 에 남긴다. 0 이면 끈다.
+          # (11-06 16:01 에 오류 없이 멈췄는데 단서가 안 남아서 넣었다)
+          STALL_SEC: ${{ vars.STALL_SEC || '180' }}
+          # 이만큼 멈춰 있으면 다음 세션을 띄우고 스스로 끝낸다. 0 이면 안 끝낸다
+          STALL_EXIT_SEC: ${{ vars.STALL_EXIT_SEC || '300' }}
+          # 기동 직후에 멈춘 경우에는 끝내지 않는다 (재기동이 끝없이 도는 것 방지)
+          STALL_MIN_UPTIME_SEC: ${{ vars.STALL_MIN_UPTIME_SEC || '600' }}
           # 외부 감시 서비스(healthchecks.io 등) ping 주소. 없으면 ping 안 함
           HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
           NOTIFY_START: ${{ vars.NOTIFY_START || '0' }}

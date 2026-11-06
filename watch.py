@@ -18,6 +18,7 @@
      공개 목록 조회라 문제되지 않는다.
 """
 
+import faulthandler
 import os
 import re
 import signal
@@ -34,9 +35,13 @@ from urllib3.util.ssl_ import create_urllib3_context
 
 import seats
 from bot import State, Telegram, handle_command, parse_date
-from health import Health
+from health import Health, Watchdog
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# 프로세스가 통째로 먹통이 됐을 때를 대비해 스택 덤프를 켜 둔다.
+# (Watchdog 이 자리를 잡아 주지만, 그쪽도 못 도는 상황을 위한 보조다)
+faulthandler.enable()
 
 KST = timezone(timedelta(hours=9))
 WDAY = ("월", "화", "수", "목", "금", "토", "일")
@@ -125,6 +130,16 @@ class Config:
         self.healthcheck_url = env("HEALTHCHECK_URL")
         # 세션 시작 시 잰 감시 공백이 이 초를 넘으면 텔레그램으로 알린다
         self.gap_alert_sec = env_int("GAP_ALERT_SEC", 120)
+        # 메인 루프가 한 단계에서 이 초만큼 진행이 없으면 멈춘 것으로 보고
+        # 스택을 떠서 알린다. 조회 쪽 타임아웃이 가장 긴 것이 60초(우회로)라
+        # 그 세 배로 잡았다. 0 이면 멈춤 감시를 끈다.
+        self.stall_sec = env_int("STALL_SEC", 180)
+        # 이만큼 멈춰 있으면 다음 세션을 띄우고 스스로 끝낸다(새 세션이 이어받는다).
+        # 알림 임계보다 뒤여야 스택을 먼저 남기고 나간다. 0 이면 끝내지 않는다.
+        self.stall_exit_sec = env_int("STALL_EXIT_SEC", 300)
+        # 기동하고 이 시간이 지나기 전에 멈춘 경우에는 스스로 끝내지 않는다.
+        # 올라오자마자 또 멈추면 재기동이 끝없이 돌기 때문이다.
+        self.stall_min_uptime_sec = env_int("STALL_MIN_UPTIME_SEC", 600)
         self.gh_run_id = env("GITHUB_RUN_ID")
         self.gh_event = env("GITHUB_EVENT_NAME")
         self.idle_sec = env_int("IDLE_SEC", 5)
@@ -706,12 +721,26 @@ def main():
     if gap is not None and gap > cfg.gap_alert_sec:
         tg.send("감시 공백이 있었습니다: %d초 (%d분)\n이전 세션 run=%s\n/health 로 자세히 볼 수 있습니다."
                 % (gap, gap // 60, health.prev_run))
-    log("다음 실행 요청 예정 %s / 강제 종료 %s"
+    log("다음 workflow run 요청 예정 %s / 강제 종료 %s"
         % (relay_at.strftime("%H:%M:%S"), deadline.strftime("%H:%M:%S")))
+
+    # ---- 멈춤 감시. 생존 기록도 이 스레드가 맡는다.
+    # 메인 루프 안에서 기록하면, 루프가 멈출 때 기록까지 같이 끊겨서 어느
+    # 단계였는지 단서가 남지 않는다 (11-06 16:01 실측).
+    # 알림만으로는 감시가 돌아오지 않으므로, 더 오래 멈춰 있으면 다음 세션을
+    # 띄우고 스스로 끝낸다. 요청이 실패하면 끝내지 않는다(아무도 안 받으면 통째로 빈다).
+    wd = Watchdog(health, tg, cfg.stall_sec,
+                  exit_sec=cfg.stall_exit_sec,
+                  relay_fn=lambda: health.request_next(
+                      cfg.relay_workflow, cfg.gh_branch,
+                      {"force": "true"} if cfg.force else {}),
+                  min_uptime_sec=cfg.stall_min_uptime_sec)
+    wd.start()
 
     # 이어받기로 끊길 때(GitHub 취소) 마지막 생존 시각을 남기고 나간다.
     # 그래야 다음 세션이 공백을 정확히 잴 수 있다.
     def on_signal(signum, _frame):
+        wd.stop()
         health.stop("cancelled(signal %d)" % signum, checks)
         sys.exit(0)
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -747,7 +776,11 @@ def main():
             return ["회차 ID 검증: 아직 시작 전 (ID 가 있는 조회가 없었음)"]
         return ["회차 ID 검증: %s 부터 / 이상 %d건 / 이번 세션 비교 %d회 / 기록된 회차 %d개"
                 % (state.id_since, state.id_anomalies, id_compares, len(state.slot_ids))]
-    health.extra_fn = id_check_lines
+
+    def extra_lines():
+        """/health 에 붙일 줄. 지금 어느 단계인지와 회차 ID 검증 현황."""
+        return [wd.summary()] + id_check_lines()
+    health.extra_fn = extra_lines
 
     def remember_zero():
         """0 으로 확인된 회차 목록을 state 에 반영. 바뀌었으면 True."""
@@ -773,9 +806,11 @@ def main():
                 " / 외부 ping 사용" if (health.active and cfg.healthcheck_url) else "")
         r = health.relay
         if r["requested_at"]:
-            out += "\n다음 실행 요청: %s %s" % (r["requested_at"][11:], "성공" if r["ok"] else "실패")
+            out += "\n다음 workflow run 요청: %s %s" % (r["requested_at"][11:],
+                                                 "성공" if r["ok"] else "실패")
         else:
-            out += "\n다음 실행 요청 예정: %s" % relay_at.strftime("%H:%M")
+            left = max(0, int((relay_at - datetime.now(KST)).total_seconds() // 60))
+            out += "\n다음 workflow run 요청 예정: %s (%d분 뒤)" % (relay_at.strftime("%H:%M"), left)
         return out + ("\n" + cfg.site_url if cfg.site_url else "")
 
     if cfg.notify_start:
@@ -785,6 +820,9 @@ def main():
 
     def pump():
         """쌓인 텔레그램 명령을 처리한다. 루프 맨 앞과 좌석 조회 사이사이에 부른다."""
+        # 좌석 조회는 회차마다 왕복이라 오래 걸린다. 그 사이에도 이 함수가 불리므로
+        # 여기서 진행 표시를 갱신해 두면 멈춘 것으로 오해받지 않는다.
+        wd.mark("텔레그램 명령")
         for update_id, text in tg.poll(state.tg_offset):
             state.tg_offset = update_id
             if text is None:                 # 내 대화방이 아닌 메시지
@@ -799,19 +837,21 @@ def main():
             state.save("offset", commit=False)
 
     while datetime.now(KST) < deadline:
-        # ---- 생존 기록 (beat_sec 마다만 실제로 쓴다)
-        health.beat(checks=checks)
+        # 생존 기록은 Watchdog 스레드가 맡는다. 여기서는 지금 어느 단계인지만 알린다.
+        wd.mark("루프 시작", checks)
 
-        # ---- 다음 실행 요청. 성공 후에도 안 끊기면 5분 뒤, 실패면 1분 뒤 다시 요청
+        # ---- 다음 workflow run 요청. 성공 후에도 안 끊기면 5분 뒤, 실패면 1분 뒤 다시 요청
         now = datetime.now(KST)
         if now >= relay_at:
             wait = 300 if health.relay["ok"] else 60
             if relay_last is None or (now - relay_last).total_seconds() >= wait:
                 relay_last = now
+                wd.mark("다음 workflow run 요청")
                 health.request_next(cfg.relay_workflow, cfg.gh_branch,
                                     {"force": "true"} if cfg.force else {})
 
         # ---- 텔레그램 명령 먼저 처리
+        wd.mark("텔레그램 명령")
         pump()
         health.active = cfg.health_enabled and not state.health_off   # /health on|off 반영
         if target_changed[0]:
@@ -829,6 +869,7 @@ def main():
                 state.save("reset progress")
 
         # ---- 미확인 알림 반복 전송
+        wd.mark("알림 재전송")
         resend_alert(cfg, state, tg, fetcher)
 
         target = state.target
@@ -851,16 +892,19 @@ def main():
 
         # ---- 조회
         checks += 1
+        wd.mark("목록 조회", checks)
         body, fmt = fetcher.fetch(target)
 
         if body is None:
             backoff = min(120, (backoff * 2) if backoff else 30)
             log("조회 실패. %d초 후 재시도합니다." % backoff)
             health.error("조회 실패 (%s)" % ("우회" if fetcher.use_proxy else "직접"))
+            wd.mark("조회 실패 후 대기 %d초" % backoff)
             time.sleep(backoff)
             continue
         backoff = 0
 
+        wd.mark("목록 해석")
         items = parse(body, fmt)
 
         # ---- 회차 기록 갱신 + screenplanid 검증
@@ -890,6 +934,7 @@ def main():
             if not announced:
                 # 편성이 뜬 것 자체를 처음 알리는 경우
                 log("일치 항목 %d건 발견. 알림을 보냅니다." % len(hits))
+                wd.mark("좌석 조회")
                 free_before = check_seats(cfg, fetcher, hits, pump)
                 if target_changed[0]:
                     continue                 # 조회 도중 날짜가 바뀌었다. 결과는 버린다
@@ -909,6 +954,7 @@ def main():
                 # 매진이던 회차에 자리가 나면 알린다.
                 # 직전에 0 으로 "확인된" 회차만 본다. 기록이 없는 회차(조회 실패 등)를
                 # 0 으로 치면, 원래 자리가 있던 회차도 새로 난 것처럼 알림이 간다.
+                wd.mark("좌석 조회")
                 free_now = check_seats(cfg, fetcher, hits, pump)
                 if target_changed[0]:
                     continue                 # 조회 도중 날짜가 바뀌었다. 결과는 버린다
@@ -959,13 +1005,15 @@ def main():
         elif checks % 30 == 0:
             log("감시 중... %d회 조회, 변동 없음 (%d개)" % (checks, len(items)))
 
+        wd.mark("다음 조회 대기")
         time.sleep(interval_for(cfg, datetime.now(KST)))
 
+    wd.stop()
     log("이 세션의 실행 시간(%d분)이 끝났습니다. 다음 세션이 이어서 감시합니다." % cfg.max_run_min)
-    # 이어받기 없이 시간이 다 됐다는 건 다음 실행 요청이 계속 실패했다는 뜻이다
+    # 이어받기 없이 시간이 다 됐다는 건 다음 workflow run 요청이 계속 실패했다는 뜻이다
     health.stop("ended(timeout)", checks)
-    tg.send("세션이 이어받기 없이 종료됐습니다. 다음 예약 실행까지 감시가 비어 있을 수 있습니다.\n"
-            "다음 실행 요청: %d회 시도, 마지막 %s"
+    tg.send("다음 workflow run 없이 이 세션이 끝났습니다. 다음 예약 실행까지 감시가 비어 있을 수 있습니다.\n"
+            "다음 workflow run 요청: %d회 시도, 마지막 %s"
             % (health.relay["tries"], "성공" if health.relay["ok"] else "실패"))
     return 0
 
