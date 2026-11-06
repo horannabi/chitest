@@ -184,6 +184,25 @@ class Health:
         self.error_count += 1
         self.last_error = "%s %s" % (fmt(now_kst()), msg[:200])
 
+    def ping_fail(self, reason=""):
+        """
+        외부 감시에 "지금 문제가 있다" 를 즉시 알린다 (ping 주소 + /fail).
+
+        유예 시간을 기다리지 않고 바로 알림이 나가므로, 스스로 풀 수 없어서
+        사람이 손을 대야 하는 상황에서만 쓴다. 스스로 복구되는 공백까지
+        여기로 보내면 알림이 잦아져서 아무도 보지 않게 된다.
+        이미 실패로 잡혀 있는 상태면 중복 알림은 가지 않는다.
+        """
+        if not (self.active and self.ping_url):
+            return False
+        try:
+            requests.get(self.ping_url.rstrip("/") + "/fail", timeout=10)
+        except requests.RequestException as e:
+            log("외부 감시 실패 보고 예외: %s" % str(e)[:160])
+            return False
+        log("외부 감시에 실패를 보고했습니다%s" % ((" - " + reason) if reason else ""))
+        return True
+
     def _ping(self):
         if not self.ping_url:
             return
@@ -568,6 +587,8 @@ class Watchdog:
                 return
             self._warned_uptime = True
             log("[멈춤] 기동 %d초 만에 멈췄습니다. 재기동이 반복될 수 있어 끝내지 않고 기다립니다." % up)
+            # 스스로 풀 수 없고 사람이 봐야 하는 상황이다. 유예를 기다리지 말고 바로 알린다.
+            self.health.ping_fail("기동 직후 멈춤")
             if self.tg:
                 self.tg.send("기동 %d분 만에 멈췄습니다.\n재기동이 끝없이 도는 것을 막기 위해 "
                              "스스로 끝내지 않고 기다립니다.\n단계: %s (%d초째)"
@@ -587,6 +608,9 @@ class Watchdog:
         if not ok:
             # 이어받을 세션이 없는데 끝내면 감시가 통째로 빈다. 버티면서 다시 시도한다.
             log("[멈춤] 다음 workflow run 요청이 실패했습니다. 끝내지 않고 1분 뒤 다시 시도합니다.")
+            # 이어받을 세션이 없어서 감시가 통째로 비어 있다. 사람이 직접 띄워야 하므로
+            # 유예를 기다리지 말고 바로 알린다. 이미 실패로 잡혀 있으면 중복 알림은 안 간다.
+            self.health.ping_fail("다음 workflow run 요청 실패")
             if self.tg and not self._warned_relay:
                 self._warned_relay = True
                 self.tg.send("멈춰 있는데 다음 workflow run 요청이 실패했습니다.\n"
