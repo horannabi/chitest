@@ -14,11 +14,14 @@ on:
         type: boolean
 
   # 6시간씩 4번 = 24시간 가동. cron 은 UTC 기준(KST-9).
+  # 분을 정시에서 비켜 둔다. 정시는 전 세계 워크플로가 몰려 지연이 특히 심하다.
+  # (11-06 실측: 00:00 예정이 02:18, 06:00 예정이 06:26, 18:00 예정은 10분 넘게 안 뜸)
+  # 이래도 보장은 안 된다. 평소 교체는 RELAY_AFTER_MIN 이 맡고 cron 은 백업이다.
   schedule:
-    - cron: "0 15 * * *"   # 00:00 KST
-    - cron: "0 21 * * *"   # 06:00 KST
-    - cron: "0 3 * * *"    # 12:00 KST
-    - cron: "0 9 * * *"    # 18:00 KST
+    - cron: "17 15 * * *"   # 00:17 KST
+    - cron: "17 21 * * *"   # 06:17 KST
+    - cron: "17 3 * * *"    # 12:17 KST
+    - cron: "17 9 * * *"    # 18:17 KST
 
 permissions:
   contents: write          # state.json 갱신, health 브랜치 기록
