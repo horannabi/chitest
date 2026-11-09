@@ -1,4 +1,4 @@
-probe_endpoints 2026-11-09 10:30:05 KST
+probe_endpoints 2026-11-09 11:25:22 KST
 page  https://www.cineq.co.kr/Theater/Movie?TheaterCode=1001
 
 페이지 len=22702
