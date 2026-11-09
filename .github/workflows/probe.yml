@@ -22,6 +22,11 @@ on:
         required: false
         default: "1001"
         type: string
+      watch_sec:
+        description: "지켜볼 시간(초). call 진단에만 사용. 이 사이에 좌석을 움직이세요"
+        required: false
+        default: "300"
+        type: string
 
 permissions:
   contents: write
@@ -29,7 +34,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20          # call 진단은 지켜보는 시간만큼 걸린다
 
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +73,8 @@ jobs:
           TARGET_URL: ${{ secrets.TARGET_URL }}
           PROBE_THEATER: ${{ inputs.theater }}
           PROBE_DATE: ${{ inputs.date }}
+          PROBE_WATCH_SEC: ${{ inputs.watch_sec }}
+          PROBE_STEP_SEC: "10"
 
       - name: 결과 커밋
         run: |
