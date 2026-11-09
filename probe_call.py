@@ -124,6 +124,29 @@ def summarize(name, method, url, data, r, why):
     return out
 
 
+CHECK_RE = re.compile(
+    r"""<input[^>]*class=["'][^"']*p-movie-check[^"']*["'][^>]*>""", re.I)
+VALUE_RE = re.compile(r"""value=["']([^"']+)["']""", re.I)
+
+
+def checkbox_codes(body):
+    """
+    ReserveMovieList 응답에서 체크박스(.p-movie-check) 의 value 를 뽑는다.
+    loadScreenPlan 에 실제로 들어가는 값은 이것뿐이다.
+    """
+    out = []
+    for m in CHECK_RE.finditer(body):
+        tag = m.group(0)
+        v = VALUE_RE.search(tag)
+        if not v:
+            continue
+        tail = body[m.end():m.end() + 80]
+        title = re.sub(r"<[^>]+>", "", tail).strip()[:40] or "?"
+        if (title, v.group(1)) not in out:
+            out.append((title, v.group(1)))
+    return out
+
+
 def movie_codes(body):
     """
     목록에서 (영화 제목, 영화 코드) 를 뽑는다. 더빙판/자막판처럼 같은 영화도
@@ -210,17 +233,28 @@ def main():
            "극장 %s / 날짜 %s" % (theater, date)]
     _write(out)                 # 이 시점부터는 중단돼도 뭐라도 남는다
 
-    r0, why0 = call(sess, "POST", origin + "/Theater/MovieTable2",
-                    {"TheaterCode": theater, "PlayDate": date})
-    codes = movie_codes(r0.text or "") if r0 is not None else []
+    # data-moviecode (MovieTable2/TimeTable 쪽) 는 호출마다 자릿수가 들쭉날쭉한
+    # 값이었다(2026180700 -> 202618070 처럼). 실제로 쓰이는 값은 팝업 자신의
+    # loadMovie() 가 /popup/ReserveMovieList 로 받아오는 체크박스(.p-movie-check)
+    # 의 value 다. 그 응답을 그대로 남겨서 구조를 직접 눈으로도 볼 수 있게 한다.
+    rm, why_rm = call(sess, "POST", origin + "/popup/ReserveMovieList",
+                      {"PlayDate": date, "TheaterCode": theater,
+                       "movieCode": "", "SortType": "1"})
+    movielist_body = rm.text or "" if rm is not None else ""
+    out += ["", "=" * 64, "ReserveMovieList 원문 (체크박스 값 확인용)", "=" * 64,
+            "HTTP %s / len=%d" % (rm.status_code if rm else "실패(%s)" % why_rm,
+                                  len(movielist_body)),
+            re.sub(r"\s+", " ", movielist_body[:3000]).strip()]
+    _write(out)
+
+    codes = checkbox_codes(movielist_body)
     candidates = pick_movies(codes, keywords)
-    print("목록에서 영화 %d편 확인. 후보 %d개: %s" %
+    print("ReserveMovieList 에서 체크박스 %d개 확인. 후보 %d개: %s" %
           (len(codes), len(candidates), ", ".join(t for t, _c in candidates[:5])), flush=True)
 
     # loadScreenPlan(movieCodeList) 가 movieCodeList.toString() 으로 보낸다.
     # 자바스크립트 배열의 toString() 은 쉼표로 이어 붙이므로, 체크된 영화(더빙판/
-    # 자막판 전부)를 한 번에 쉼표로 묶어 보내는 것이 맞다. 하나씩 따로 보내면
-    # (앞서 그렇게 했다가 실패했다) 서로 다른 버전이라 빈 응답이 날 수 있다.
+    # 자막판 전부)를 한 번에 쉼표로 묶어 보내는 것이 맞다.
     title = ", ".join(t for t, _c in candidates) if candidates else None
     movie = ",".join(c for _t, c in candidates) if candidates else None
 
