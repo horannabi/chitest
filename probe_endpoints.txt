@@ -1,0 +1,43 @@
+probe_endpoints 2026-11-09 10:25:30 KST
+page  https://www.cineq.co.kr/Theater/Movie?TheaterCode=1001
+
+페이지 len=22702
+스크립트 2개 확인
+
+
+============================================================
+시간표·예매로 보이는 주소 (23개)
+============================================================
+  /Customer/NoticeIRList                                        <- page
+  /Customer/NoticeList                                          <- page
+  /Event/WinnerList                                             <- page
+  /Movie                                                        <- page
+  /Movie/BoxOffice                                              <- page
+  /Movie/Comming                                                <- page
+  /Movie/Latest                                                 <- page
+  /Popup/AuthenticateMobileNo                                   <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/ChangePwd                                              <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/FindID                                                 <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/Login                                                  <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/Payment                                                <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/Pricetable?TheaterCode=                                <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/Print                                                  <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/Recovery                                               <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/Reserve                                                <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/ReserveDone                                            <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/Seatchoice                                             <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/Terms                                                  <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/TermsTimeTable                                         <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Popup/WithdrawMember                                         <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Theater/MovieTable2                                          <- page
+  /Theater/TimeTable                                            <- page
+
+============================================================
+그 밖의 호출 (3개)
+============================================================
+  /Home/Header                                                  <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Member/LoginCheck                                            <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+  /Member/LogoutPop                                             <- page, script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+
+위 주소 중 상영시간표를 돌려주는 것을 찾으면,
+봇이 긁는 목록 대신 그쪽을 쓰도록 바꿀 수 있습니다.
