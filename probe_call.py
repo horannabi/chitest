@@ -196,7 +196,9 @@ def main():
     origin = "/".join(target.split("/")[:3]) if target else "https://www.cineq.co.kr"
     sess = make_session(origin)
 
-    # 팝업은 영화 코드가 있어야 시간표를 준다. 목록에서 먼저 얻어온다.
+    # 팝업은 /Popup/Reserve 자체가 아니라, 그 안의 자바스크립트가 영화를 고른
+    # 뒤에 /popup/ReserveScreenPlan 을 한 번 더 불러서 시간표를 채운다.
+    # probe_popup_movie.html 에서 확인: loadScreenPlan() -> POST ReserveScreenPlan
     keywords = [k.strip() for k in (os.environ.get("KEYWORDS") or "").split(",") if k.strip()]
     r0, why0 = call(sess, "POST", origin + "/Theater/MovieTable2",
                     {"TheaterCode": theater, "PlayDate": date})
@@ -211,10 +213,8 @@ def main():
          {"TheaterCode": theater, "PlayDate": date}),
     ]
     if movie:
-        cases.insert(0, ("팝업(영화지정)", "POST", origin + "/Popup/Reserve",
+        cases.insert(0, ("팝업ScreenPlan", "POST", origin + "/popup/ReserveScreenPlan",
                          {"theaterCode": theater, "playDate": date, "movieCode": movie}))
-    cases.append(("팝업(영화없음)", "POST", origin + "/Popup/Reserve",
-                  {"theaterCode": theater, "playDate": date}))
     if target and "{date}" in target:
         cases.append(("봇이 긁는 주소", "GET", target.replace("{date}", date), None))
 
@@ -232,12 +232,6 @@ def main():
         out += summarize(name, method, url, data, r, why)
         if r is not None:
             base[name] = fingerprint(r.text or "")
-            # 팝업 응답은 통째로 남긴다. 영화를 지정해도 시간표가 안 와서,
-            # 어떻게 채우는지 원문을 봐야 한다.
-            if "Popup/Reserve" in url:
-                tag = "movie" if (data or {}).get("movieCode") else "plain"
-                with open("probe_popup_%s.html" % tag, "w", encoding="utf-8") as f:
-                    f.write(r.text or "")
         print("%s -> %s" % (name, "실패(%s)" % why if r is None else r.status_code),
               flush=True)
 
