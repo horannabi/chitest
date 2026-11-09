@@ -180,6 +180,27 @@ def fingerprint(body):
     return plans, lefts
 
 
+def seat_near(body, plan_id):
+    """회차 ID 주변에서 잔여석 표시를 찾는다. 소스마다 표기 형식이 다르다."""
+    idx = body.find('screenplanid="%s"' % plan_id)
+    if idx == -1:
+        idx = body.find("screenplanid='%s'" % plan_id)
+    if idx == -1:
+        return "(이 회차 없음)"
+    window = body[idx:idx + 500]
+    if "매진" in window:
+        return "매진"
+    # 실측 응답에는 숫자 사이에 태그가 낀 경우가 있다:
+    # <span class="left">145</span><span class="seats">/</span><span class="all">146</span>
+    m = re.search(r"(\d{1,4})(?:<[^>]*>|\s){0,40}/(?:<[^>]*>|\s){0,40}(\d{1,4})", window)
+    if m:
+        return "%s/%s" % m.groups()
+    m = re.search(r"(\d{1,4})(?:<[^>]*>|\s){0,10}석", window)
+    if m:
+        return "%s석" % m.group(1)
+    return "(표시 못 찾음)"
+
+
 def diff_text(old, new):
     """무엇이 어떻게 바뀌었는지 한 줄로."""
     oplans, olefts = old
@@ -277,14 +298,31 @@ def main():
 
     # 먼저 한 번씩 불러 응답 생김새를 남긴다. 구조를 봐야 다음 판단을 할 수 있다.
     base = {}
+    full_body = {}               # 회차별 직접 비교용 - summarize() 는 앞부분만 자른다
     for name, method, url, data in cases:
         r, why = call(sess, method, url, data)
         out += summarize(name, method, url, data, r, why)
         if r is not None:
             base[name] = fingerprint(r.text or "")
+            full_body[name] = r.text or ""
         print("%s -> %s" % (name, "실패(%s)" % why if r is None else r.status_code),
               flush=True)
         _write(out)              # 매 호출마다 즉시 반영 - 중단돼도 여기까진 남는다
+
+    # 팝업이 돌려준 회차 ID를 기준으로, 같은 회차를 다른 소스들이 지금 뭐라고
+    # 하는지 나란히 뽑는다. summarize() 의 앞부분 자르기 때문에 원하는 회차가
+    # 거기 없을 수 있어서, 저장해 둔 전체 본문에서 다시 찾는다.
+    plan_ids = PLAN_RE.findall(full_body.get("팝업ScreenPlan", ""))
+    if plan_ids:
+        out += ["", "=" * 64, "회차별 직접 비교 (팝업 기준 회차 ID)", "=" * 64]
+        for pid in sorted(set(plan_ids)):
+            out.append("[회차 %s]" % pid)
+            for name in ("팝업ScreenPlan", "목록-시간대별", "목록-영화별", "봇이 긁는 주소"):
+                body = full_body.get(name)
+                if body is None:
+                    continue
+                out.append("  %-14s %s" % (name, seat_near(body, pid)))
+        _write(out)
 
     if watch_sec <= 0:
         # 응답만 받아보려는 경우. 좌석을 움직일 필요가 없다.
