@@ -120,7 +120,10 @@ def summarize(name, method, url, data, r, why):
         if h in r.headers:
             out.append("  %s: %s" % (h, r.headers[h][:70]))
 
-    out += ["  --- 응답 앞부분 ---", "  " + re.sub(r"\s+", " ", body[:DUMP]).strip()]
+    # 팝업 응답은 몇 KB 수준이라 통째로 봐도 부담이 없다. 목록 쪽(수만 자)만 자른다.
+    cut = len(body) if len(body) <= 8000 else DUMP
+    label = "응답 전체" if cut == len(body) else "응답 앞부분"
+    out += ["  --- %s ---" % label, "  " + re.sub(r"\s+", " ", body[:cut]).strip()]
     return out
 
 
