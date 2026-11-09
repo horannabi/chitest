@@ -1,4 +1,4 @@
-probe_endpoints 2026-11-09 10:26:18 KST
+probe_endpoints 2026-11-09 10:30:05 KST
 page  https://www.cineq.co.kr/Theater/Movie?TheaterCode=1001
 
 페이지 len=22702
@@ -38,6 +38,46 @@ page  https://www.cineq.co.kr/Theater/Movie?TheaterCode=1001
   /Home/Header                                                  <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
   /Member/LoginCheck                                            <- script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
   /Member/LogoutPop                                             <- page, script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc
+
+============================================================
+호출부 코드 (파라미터 확인용)
+============================================================
+
+[/Popup/Reserve]  (script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc)
+  ....reserve={jsonData:{playDate:"",theaterCode:"",movieCode:"",screenPlanId:"",playNumber:""},cache:{},open:function(n){var t=$.extend({},$.desktop.reserve.jsonData,n);console.log(n);$.post("/Popup/Reserve",n,function(n){var t=$.desktop.appendDiv("popup_reserve");$.desktop.reserveData={};t.html(n);t.modal({showClose:!1,escapeClose:!1,clickClose:!1,fadeDuration:80,fadeDelay:.5,blockerClass:"reserve"})})},openPrev:function(n){$.post("/Popup/Reserve",n,function(n){var t=$.desktop.appendDiv("popup_rese...
+
+[/Popup/Reserve]  (script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc)
+  ...popup_reserve");$.desktop.reserveData={};t.html(n);t.modal({showClose:!1,escapeClose:!1,clickClose:!1,fadeDuration:80,fadeDelay:.5,blockerClass:"reserve"})})},openPrev:function(n){$.post("/Popup/Reserve",n,function(n){var t=$.desktop.appendDiv("popup_reserve");$.desktop.reserveData={};t.html(n)})},openTheater:function(n){$.desktop.reserve.jsonData=$.extend({},$.desktop.reserve.jsonData,n);console.log(n);$.post("/Popup/Reserve",n,function(n){var t=$.desktop.appendDiv("popup_reserve");t.html(n);t....
+
+[/Popup/ReserveDone]  (script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc)
+  ...st("/Popup/Print",{settleKey:n},function(n){var t=$.desktop.appendDiv("popup_reserve");t.html(n)})}};$.desktop.reserveDone={};$.desktop.reserveDone={open:function(n,t,i,r,u,f,e,o){$.post("/Popup/ReserveDone",{settleKey:n,isSms:t,phone:i+r+u,password:f,receiptType:e,receiptTypeNo:o},function(n){var t=$.desktop.appendDiv("popup_reserve");t.html(n)})}};$.desktop.member={};$.desktop.member={findid:function(n){$.get("/Popup/FindID",n,function(n){var t=$.desktop.appendDiv("popup_member");t.html(n);t.m...
+
+[/Popup/ReserveDone]  (script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc)
+  ...pup/Print",{settleKey:n},function(n){var t=$.desktop.appendDiv("popup_reserve");t.html(n)})}};$.desktop.reserveDone={};$.desktop.reserveDone={open:function(n,t,i,r,u,f,e,o){$.post("/Popup/ReserveDone",{settleKey:n,isSms:t,phone:i+r+u,password:f,receiptType:e,receiptTypeNo:o},function(n){var t=$.desktop.appendDiv("popup_reserve");t.html(n)})}};$.desktop.member={};$.desktop.member={findid:function(n){$.get("/Popup/FindID",n,function(n){var t=$.desktop.appendDiv("popup_member");t.html(n);t.modal({s...
+
+[/Popup/Seatchoice]  (script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc)
+  ...lose:!1,fadeDuration:80,fadeDelay:.5,blockerClass:"reserve"})})},prev:function(n){var t=$.desktop.reserve.cache[n]}};$.desktop.seatchoice={};$.desktop.seatchoice={open:function(n){$.post("/Popup/Seatchoice",n,function(n){var t=$.desktop.appendDiv("popup_reserve");t.html(n)})}};$.desktop.payment={};$.desktop.payment={open:function(){$.post("/Member/LoginCheck",function(n){n.IsLogin==!0||n.NoMemberLogin==!0?$.desktop.payment.loadPayment():$.desktop.login.open($.desktop.payment._login,1)},"json")},...
+
+[/Popup/Seatchoice]  (script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc)
+  ...,fadeDuration:80,fadeDelay:.5,blockerClass:"reserve"})})},prev:function(n){var t=$.desktop.reserve.cache[n]}};$.desktop.seatchoice={};$.desktop.seatchoice={open:function(n){$.post("/Popup/Seatchoice",n,function(n){var t=$.desktop.appendDiv("popup_reserve");t.html(n)})}};$.desktop.payment={};$.desktop.payment={open:function(){$.post("/Member/LoginCheck",function(n){n.IsLogin==!0||n.NoMemberLogin==!0?$.desktop.payment.loadPayment():$.desktop.login.open($.desktop.payment._login,1)},"json")},_login:...
+
+[/Popup/TermsTimeTable]  (script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc)
+  ...=$.desktop.appendDiv("popup_member");t.html(n);t.modal({showClose:!1,escapeClose:!0,clickClose:!1,fadeDuration:80,fadeDelay:.5,blockerClass:"terms"})})},termstimetable:function(n){$.get("/Popup/TermsTimeTable",n,function(n){var t=$.desktop.appendDiv("popup_member");t.html(n);t.modal({showClose:!1,escapeClose:!0,clickClose:!1,fadeDuration:80,fadeDelay:.5,blockerClass:"terms"})})},priceTable:function(n,t){$.get("/Popup/Pricetable?TheaterCode="+n,t,function(n){var t=$.desktop.appendDiv("popup-price...
+
+[/Popup/TermsTimeTable]  (script?v=Ev7OFJtSf14YXVVWioRaNM3dNH5htJc)
+  ...ktop.appendDiv("popup_member");t.html(n);t.modal({showClose:!1,escapeClose:!0,clickClose:!1,fadeDuration:80,fadeDelay:.5,blockerClass:"terms"})})},termstimetable:function(n){$.get("/Popup/TermsTimeTable",n,function(n){var t=$.desktop.appendDiv("popup_member");t.html(n);t.modal({showClose:!1,escapeClose:!0,clickClose:!1,fadeDuration:80,fadeDelay:.5,blockerClass:"terms"})})},priceTable:function(n,t){$.get("/Popup/Pricetable?TheaterCode="+n,t,function(n){var t=$.desktop.appendDiv("popup-pricetable"...
+
+[/Theater/MovieTable2]  (page)
+  ...Date: playDate }, function (data) { $("div.theater-movie", "div.section-theater-body").html(data); }); } else { $.post("/Theater/MovieTable2", { TheaterCode: theaterCode, PlayDate: playDate }, function (data) { $("div.theater-movie", "div.section-theater-body").html(data); }); } } $("li>a.next", "div.section div.cal").click(function (e) { e.preve...
+
+[/Theater/MovieTable2]  (page)
+  ...layDate }, function (data) { $("div.theater-movie", "div.section-theater-body").html(data); }); } else { $.post("/Theater/MovieTable2", { TheaterCode: theaterCode, PlayDate: playDate }, function (data) { $("div.theater-movie", "div.section-theater-body").html(data); }); } } $("li>a.next", "div.section div.cal").click(function (e) { e.preventDefau...
+
+[/Theater/TimeTable]  (page)
+  ...var playDate = selectedDate.replace(/-/gi, ''); //theaterCode = "2001"; playDate = "20160524"; if (selectedListType == "time") { $.post("/Theater/TimeTable", { TheaterCode: theaterCode, PlayDate: playDate }, function (data) { $("div.theater-movie", "div.section-theater-body").html(data); }); } else { $.post("/Theater/MovieTable2", { TheaterCode: theaterCode, PlayDate: playDate }...
+
+[/Theater/TimeTable]  (page)
+  ...var playDate = selectedDate.replace(/-/gi, ''); //theaterCode = "2001"; playDate = "20160524"; if (selectedListType == "time") { $.post("/Theater/TimeTable", { TheaterCode: theaterCode, PlayDate: playDate }, function (data) { $("div.theater-movie", "div.section-theater-body").html(data); }); } else { $.post("/Theater/MovieTable2", { TheaterCode: theaterCode, PlayDate: playDate }, funct...
 
 위 주소 중 상영시간표를 돌려주는 것을 찾으면,
 봇이 긁는 목록 대신 그쪽을 쓰도록 바꿀 수 있습니다.
