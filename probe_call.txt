@@ -1,0 +1,58 @@
+probe_call 2026-11-09 10:35:22 KST
+극장 1001 / 날짜 20261111
+같은 날짜를 여러 주소로 불러 숫자를 비교합니다.
+
+================================================================
+예매 팝업
+  POST https://www.cineq.co.kr/Popup/Reserve
+  보낸 값: {'theaterCode': '1001', 'playDate': '20261111'}
+  HTTP 200 / len=21206 / text/html; charset=utf-8
+  회차 ID(screenplanid) 0개 / 고유 0개
+  매진 표시 0곳
+  잔여 표시(숫자/숫자) 0곳
+  Cache-Control: private
+  --- 응답 앞부분 ---
+  <div id="popup_olddata" style="display:none;" data-theatercode="1001" data-moviecode="" data-playdate="20261111" data-screenplanid="" data-playnumber=""></div> <div class="popup" data-theatercode="1001" data-moviecode="" data-playdate="20261111" data-screenplanid="" data-playnumber=""> <div class="section-pop-top"> <!--<h3 class="title">제목</h3>--> <a href="#" class="btn-rsv-reset">다시 예매</a> </div> <div class="section-pop-left"> <div class="wrap-date"> <h4 class="title">날짜</h4> <a href="#" class="btn-show-cal">달력보기</a> <input type="hidden" name="cal" id="rsvcal" class="input-cal" value="2026-11-09" /> <ul class="cal-week" style="padding-left:0"></ul> </div> <div class="wrap-theater"> <h4 class="title">영화관</h4> <div class="theater-box"> <a href="#" class="theater" data-theatercode="1001">신도림</a> <a href="#" class="theater" data-theatercode="6001">경주보문</a> <a href="#" class="theater" data-theatercode="6002">구미봉곡</a> <a href="#" class="theater" data-theatercode="2002">남양주다산</a> <a href="#" class="theater" data-theatercode="6007">대구경산</a> <a href="#" class="theater" data-theatercode="2102">청라</a> <a href="#" class="theater" data-theatercode="4002">보은</a> <a href="#" class="theater" data-theatercode="6005">영덕예주</a> <a href="#" class="theater" data-theatercode="6003">칠곡호이</a>
+
+================================================================
+하단 목록 - 시간대별
+  POST https://www.cineq.co.kr/Theater/TimeTable
+  보낸 값: {'TheaterCode': '1001', 'PlayDate': '20261111'}
+  HTTP 200 / len=70766 / text/html; charset=utf-8
+  회차 ID(screenplanid) 54개 / 고유 54개
+  매진 표시 12곳
+  잔여 표시(숫자/숫자) 0곳
+    회차 ID 예: 1110312, 1110314, 1111114, 1111115, 1111116, 1111530, 1111531, 1111532, 1111533, 1111534, 1111535, 1111550
+  Cache-Control: private
+  --- 응답 앞부분 ---
+  <div class="priceclick"><div class="pricebutton"><a href="#" class="btn priceTableBtn" title="관람료 안내 팝업">관람료 안내</a></div></div> <table class="table-movie-time"> <tr style="height:90px"> <td> <div class="timetable-attrib-morning">조조</div> <span class="from">10:00</span><span class="to">~12:03</span> </td> <td data-playdate="20261111" data-theatercode="1001" data-moviecode="202654200000000000000000000000000000000000000000000000000000000000000000000000000" data-screenplanid="1111668" data-playnumber="2"> <a href="#" class="title"><span class="rate-12">12</span>스크루지: 크리스마스 캐럴 </a> </td> <td><span class="screen-name">4 관</span> <span class="theater-name">신도림</span></td> <td><span class="left">140</span><span class="seats">/</span><span class="all">140</span></td> </tr> <tr style="height:90
+
+================================================================
+하단 목록 - 영화별
+  POST https://www.cineq.co.kr/Theater/MovieTable2
+  보낸 값: {'TheaterCode': '1001', 'PlayDate': '20261111'}
+  HTTP 200 / len=59888 / text/html; charset=utf-8
+  회차 ID(screenplanid) 54개 / 고유 54개
+  매진 표시 12곳
+  잔여 표시(숫자/숫자) 42곳
+    예: 90/91, 66/69, 57/91, 143/146, 141/146, 91/91, 90/91, 214/214, 209/214, 195/214, 30/30, 30/30
+    회차 ID 예: 1110312, 1110314, 1111114, 1111115, 1111116, 1111530, 1111531, 1111532, 1111533, 1111534, 1111535, 1111550
+  Cache-Control: private
+  --- 응답 앞부분 ---
+  <div class="priceclick"><div class="pricebutton"><a href="#" class="btn priceTableBtn" title="관람료 안내 팝업">관람료 안내</a></div></div> <div class="each-movie-time"> <div class="title"><span class="rate-x">18</span>트레인스포팅 </div> <div class="screen"> <div class="screen-name" style="font-size:15px;line-height:20px;"><br />8 관</div> <div class="time-block"> <div class="time" data-playdate="20261111" data-theatercode="1001" data-moviecode="1997008400000000000000000000000000000000000000000000000000000000000000000000000000" data-screenplanid="1111550" data-playnumber="4"> <a href="#"> 15:30<span class="to"> ~ 17:09</span> <span class="seats-status">90 / 91</span> </a> </div> </div> </div> <div class="screen"> <div class="screen-name" style="font-size:15px;line-height:20px;"><br />(RESERVE)5 관</div>
+
+================================================================
+지금 봇이 긁는 주소
+  GET https://www.cineq.co.kr/Theater/MovieTable2?TheaterCode=1001&PlayDate=20261111
+  HTTP 200 / len=59942 / text/html; charset=utf-8
+  회차 ID(screenplanid) 54개 / 고유 54개
+  매진 표시 12곳
+  잔여 표시(숫자/숫자) 42곳
+    예: 90/91, 66/69, 57/91, 143/146, 141/146, 91/91, 90/91, 214/214, 209/214, 195/214, 30/30, 30/30
+    회차 ID 예: 1110312, 1110314, 1111114, 1111115, 1111116, 1111530, 1111531, 1111532, 1111533, 1111534, 1111535, 1111550
+  Cache-Control: private
+  --- 응답 앞부분 ---
+  <div class="priceclick"><div class="pricebutton"><a href="#" class="btn priceTableBtn" title="관람료 안내 팝업">관람료 안내</a></div></div> <div class="each-movie-time"> <div class="title"><span class="rate-x">18</span>트레인스포팅 </div> <div class="screen"> <div class="screen-name" style="font-size:15px;line-height:20px;"><br />8 관</div> <div class="time-block"> <div class="time" data-playdate="20261111" data-theatercode="1001" data-moviecode="19970084000000000000000000000000000000000000000000000000000000000000000000000000000" data-screenplanid="1111550" data-playnumber="4"> <a href="#"> 15:30<span class="to"> ~ 17:09</span> <span class="seats-status">90 / 91</span> </a> </div> </div> </div> <div class="screen"> <div class="screen-name" style="font-size:15px;line-height:20px;"><br />(RESERVE)5 관</div>
+
+================================================================
+회차 ID 개수와 잔여 숫자가 주소마다 다르면, 많은 쪽이 더 최신입니다.
