@@ -1,13 +1,13 @@
-probe_call 2026-11-09 11:10:53 KST
+probe_call 2026-11-09 11:25:47 KST
 극장 1001 / 날짜 20261110
-300초 동안 10초 간격으로 지켜봅니다.
+150초 동안 10초 간격으로 지켜봅니다.
 지금부터 좌석을 예매하거나 취소하면, 어느 주소가 먼저 반영하는지 보입니다.
-고른 영화: 0극장판 치이카와: 인어 섬의 비밀 (code=2026180700...)
+고른 영화: 0극장판 치이카와: 인어 섬의 비밀, 0극장판 치이카와: 인어 섬의 비밀  (더빙) (code=202618070,202618074)
 
 ================================================================
 팝업ScreenPlan
   POST https://www.cineq.co.kr/popup/ReserveScreenPlan
-  보낸 값: {'theaterCode': '1001', 'playDate': '20261110', 'movieCode': '2026180700'}
+  보낸 값: {'theaterCode': '1001', 'playDate': '20261110', 'movieCode': '202618070,202618074'}
   HTTP 200 / len=8 / text/html; charset=utf-8
   회차 ID(screenplanid) 0개 / 고유 0개
   매진 표시 0곳
@@ -20,19 +20,32 @@ probe_call 2026-11-09 11:10:53 KST
 목록-시간대별
   POST https://www.cineq.co.kr/Theater/TimeTable
   보낸 값: {'TheaterCode': '1001', 'PlayDate': '20261110'}
-  HTTP 200 / len=63888 / text/html; charset=utf-8
+  HTTP 200 / len=63832 / text/html; charset=utf-8
   회차 ID(screenplanid) 51개 / 고유 51개
   매진 표시 0곳
   잔여 표시(숫자/숫자) 0곳
     회차 ID 예: 1111110, 1111111, 1111112, 1111343, 1111344, 1111345, 1111346, 1111347, 1111348, 1111349, 1111350, 1111351
   Cache-Control: private
   --- 응답 앞부분 ---
-  <div class="priceclick"><div class="pricebutton"><a href="#" class="btn priceTableBtn" title="관람료 안내 팝업">관람료 안내</a></div></div> <table class="table-movie-time"> <tr style="height:90px"> <td> <div class="timetable-attrib-morning">조조</div> <span class="from">10:30</span><span class="to">~12:16</span> </td> <td data-playdate="20261110" data-theatercode="1001" data-moviecode="2026180744" data-screenplanid="1111358" data-playnumber="2"> <a href="#" class="title"><span class="rate-all">0</span>극장판 치이카와: 인어 섬의 비밀 (더빙)</a> </td> <td><span class="screen-name">6 관</span> <span class="theater-name">신도림</span></td> <td><span class="left">146</span><span class="seats">/</span><span class="all">146</span></td> </tr> <tr style="height:90px"> <td>
+  <div class="priceclick"><div class="pricebutton"><a href="#" class="btn priceTableBtn" title="관람료 안내 팝업">관람료 안내</a></div></div> <table class="table-movie-time"> <tr style="height:90px"> <td> <div class="timetable-attrib-morning">조조</div> <span class="from">10:30</span><span class="to">~12:16</span> </td> <td data-playdate="20261110" data-theatercode="1001" data-moviecode="202618074" data-screenplanid="1111358" data-playnumber="2"> <a href="#" class="title"><span class="rate-all">0</span>극장판 치이카와: 인어 섬의 비밀 (더빙)</a> </td> <td><span class="screen-name">6 관</span> <span class="theater-name">신도림</span></td> <td><span class="left">145</span><span class="seats">/</span><span class="all">146</span></td> </tr> <tr style="height:90px"> <td>
 
 ================================================================
 목록-영화별
   POST https://www.cineq.co.kr/Theater/MovieTable2
   보낸 값: {'TheaterCode': '1001', 'PlayDate': '20261110'}
+  HTTP 200 / len=53440 / text/html; charset=utf-8
+  회차 ID(screenplanid) 51개 / 고유 51개
+  매진 표시 0곳
+  잔여 표시(숫자/숫자) 51곳
+    예: 91/91, 91/91, 90/91, 90/91, 90/91, 90/91, 69/69, 69/69, 91/91, 91/91, 91/91, 69/69
+    회차 ID 예: 1111110, 1111111, 1111112, 1111343, 1111344, 1111345, 1111346, 1111347, 1111348, 1111349, 1111350, 1111351
+  Cache-Control: private
+  --- 응답 앞부분 ---
+  <div class="priceclick"><div class="pricebutton"><a href="#" class="btn priceTableBtn" title="관람료 안내 팝업">관람료 안내</a></div></div> <div class="each-movie-time"> <div class="title"><span class="rate-x">18</span>트레인스포팅 </div> <div class="screen"> <div class="screen-name" style="font-size:15px;line-height:20px;"><br />8 관</div> <div class="time-block"> <div class="time" data-playdate="20261110" data-theatercode="1001" data-moviecode="1997008400" data-screenplanid="1111375" data-playnumber="2"> <a href="#"> 10:40<span class="to"> ~ 12:19</span> <span class="seats-status">91 / 91</span> </a> <div class="movie-table-attributes"> <div class="timetable-attrib-morning" title="조조">조조</div> </div> </div> <div class="time"
+
+================================================================
+봇이 긁는 주소
+  GET https://www.cineq.co.kr/Theater/MovieTable2?TheaterCode=1001&PlayDate=20261110
   HTTP 200 / len=53496 / text/html; charset=utf-8
   회차 ID(screenplanid) 51개 / 고유 51개
   매진 표시 0곳
@@ -44,24 +57,11 @@ probe_call 2026-11-09 11:10:53 KST
   <div class="priceclick"><div class="pricebutton"><a href="#" class="btn priceTableBtn" title="관람료 안내 팝업">관람료 안내</a></div></div> <div class="each-movie-time"> <div class="title"><span class="rate-x">18</span>트레인스포팅 </div> <div class="screen"> <div class="screen-name" style="font-size:15px;line-height:20px;"><br />8 관</div> <div class="time-block"> <div class="time" data-playdate="20261110" data-theatercode="1001" data-moviecode="19970084000" data-screenplanid="1111375" data-playnumber="2"> <a href="#"> 10:40<span class="to"> ~ 12:19</span> <span class="seats-status">91 / 91</span> </a> <div class="movie-table-attributes"> <div class="timetable-attrib-morning" title="조조">조조</div> </div> </div> <div class="time"
 
 ================================================================
-봇이 긁는 주소
-  GET https://www.cineq.co.kr/Theater/MovieTable2?TheaterCode=1001&PlayDate=20261110
-  HTTP 200 / len=53552 / text/html; charset=utf-8
-  회차 ID(screenplanid) 51개 / 고유 51개
-  매진 표시 0곳
-  잔여 표시(숫자/숫자) 51곳
-    예: 91/91, 91/91, 90/91, 90/91, 90/91, 90/91, 69/69, 69/69, 91/91, 91/91, 91/91, 69/69
-    회차 ID 예: 1111110, 1111111, 1111112, 1111343, 1111344, 1111345, 1111346, 1111347, 1111348, 1111349, 1111350, 1111351
-  Cache-Control: private
-  --- 응답 앞부분 ---
-  <div class="priceclick"><div class="pricebutton"><a href="#" class="btn priceTableBtn" title="관람료 안내 팝업">관람료 안내</a></div></div> <div class="each-movie-time"> <div class="title"><span class="rate-x">18</span>트레인스포팅 </div> <div class="screen"> <div class="screen-name" style="font-size:15px;line-height:20px;"><br />8 관</div> <div class="time-block"> <div class="time" data-playdate="20261110" data-theatercode="1001" data-moviecode="199700840000" data-screenplanid="1111375" data-playnumber="2"> <a href="#"> 10:40<span class="to"> ~ 12:19</span> <span class="seats-status">91 / 91</span> </a> <div class="movie-table-attributes"> <div class="timetable-attrib-morning" title="조조">조조</div> </div> </div> <div class="time"
-
-================================================================
 변화 기록
 ================================================================
 
 ================================================================
-요약 (29회 확인)
+요약 (14회 확인)
 ================================================================
 아무 주소에서도 변화가 없었습니다.
 지켜보는 동안 예매/취소가 없었거나, 모두 같은 시점에 갱신됩니다.
