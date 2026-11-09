@@ -1,19 +1,19 @@
-probe_seat 2026-11-04 16:55:57 KST
-date 20261104
+probe_seat 2026-11-09 10:23:01 KST
+date 20261109
 
-목록 200 len=30976
-회차 screenPlanId=1109718 playNumber=5
+목록 200 len=53986
+회차 screenPlanId=1111333 playNumber=3
 
-/Popup/SeatChoiceSeatMap -> 200 len=23009
-  class  : choose-seat(91), mini(91), checked(16), row(12), head(12), accessible(2), screen(1)
+/Popup/SeatChoiceSeatMap -> 200 len=22785
+  class  : choose-seat(91), mini(91), row(12), head(12), accessible(2), screen(1)
   data-* : data-rowname(102), data-seatgroup(91), data-colnumber(91), data-seatmapid(91), data-screenid(91), data-screenplanid(91)
   표시    : (없음)
   호출    : (없음)
   좌석수  : normal=0, reserved=0, selected=0, disabled=0, accessible=2, couple=0
-  좌석요소: <input type='checkbox' class='choose-seat ' id='A3' value='A3' data-seatgroup='2' data-rowname='A' data-colnumber='3' data-seatmapid='8001' data-screenid='66' data-screenplanid='1109718' /> || <input type='checkbox' class='choose-seat ' id='A4' value='A4' data-seatgroup='2' data-rowname='A' data-colnumber='4' data-seatmapid='8002' data-screenid='66' data-screenplanid='1109718' /> || <input type='checkbox' class='choose-seat ' id='A5' value='A5' data-seatgroup='2' data-rowname='A' data-colnumber='5' data-seatmapid='8003' data-screenid='66' data-screenplanid='1109718' />
+  좌석요소: <input type='checkbox' class='choose-seat ' id='A3' value='A3' data-seatgroup='2' data-rowname='A' data-colnumber='3' data-seatmapid='8001' data-screenid='66' data-screenplanid='1111333' /> || <input type='checkbox' class='choose-seat ' id='A4' value='A4' data-seatgroup='2' data-rowname='A' data-colnumber='4' data-seatmapid='8002' data-screenid='66' data-screenplanid='1111333' /> || <input type='checkbox' class='choose-seat ' id='A5' value='A5' data-seatgroup='2' data-rowname='A' data-colnumber='5' data-seatmapid='8003' data-screenid='66' data-screenplanid='1111333' />
   seatgroup 값: 2(65), 1(19), 3(7)
 
-/Popup/Seatchoice -> 200 len=39991
+/Popup/Seatchoice -> 200 len=39271
   class  : input-seat-block(10), input-seat(4), input-radio(4), input-indicator(4), kind(3), input-select(3), title(2), popup(1), seatChoice(1), section-pop-top(1), btn-rsv-reset(1), section-pop-movie(1), poster(1), rate-x(1), table-movie-info(1), time(1), number(1), seats(1), total-price(1), section-pop-theater(1), wrap-number-info(1), id_2780(1), id_2834(1), id_4683(1), wrap-seats(1)
   data-* : data-seatgroup(7), data-rowname(7), data-seatmapid(5), data-colnumber(5), data-salepriceid(3), data-price(3), data-salepricename(3), data-salepricecode(3), data-playdate(2), data-screenplanid(2), data-theatercode(1), data-moviecode(1)
   표시    : 장애, 우대, 커플, disabled, handicap, 선택, 예매
