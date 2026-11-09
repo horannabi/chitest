@@ -107,16 +107,27 @@ def interesting(path):
     return any(k in low for k in INTEREST)
 
 
-def scan(text, where, found):
+def snippet(text, at, before=180, after=320):
+    """호출부 주변 코드. 어떤 파라미터를 함께 보내는지 보려는 것이다."""
+    s = max(0, at - before)
+    e = min(len(text), at + after)
+    cut = text[s:e]
+    cut = re.sub(r"\s+", " ", cut).strip()
+    return ("..." if s else "") + cut + ("..." if e < len(text) else "")
+
+
+def scan(text, where, found, ctx):
     """본문에서 호출 주소를 뽑아 found 에 모은다. {경로: {출처}}"""
     for m in CALL_RE.finditer(text):
         p = m.group(1)
         if p.startswith(("/", "http")) or "/" in p:
             found.setdefault(p, set()).add(where)
+            ctx.setdefault(p, []).append((where, snippet(text, m.start())))
     for m in PATH_RE.finditer(text):
         p = m.group(1)
         if interesting(p):
             found.setdefault(p, set()).add(where)
+            ctx.setdefault(p, []).append((where, snippet(text, m.start())))
 
 
 def main():
@@ -137,8 +148,8 @@ def main():
         return 1
     out.append("페이지 len=%d" % len(body))
 
-    found = {}
-    scan(body, "page", found)
+    found, ctx = {}, {}
+    scan(body, "page", found, ctx)
 
     # 페이지가 불러오는 스크립트도 같이 본다. 호출 주소는 보통 여기 들어 있다.
     srcs = []
@@ -156,7 +167,7 @@ def main():
         if js is None:
             out.append("  [건너뜀] %s (%s)" % (s[:90], why))
             continue
-        scan(js, s.rsplit("/", 1)[-1][:40], found)
+        scan(js, s.rsplit("/", 1)[-1][:40], found, ctx)
 
     # 관심 경로를 먼저, 그 외는 뒤에
     hot = sorted(p for p in found if interesting(p))
@@ -170,6 +181,16 @@ def main():
     out += ["", "=" * 60, "그 밖의 호출 (%d개)" % len(rest), "=" * 60]
     for p in rest[:80]:
         out.append("  %-60s  <- %s" % (p[:60], ", ".join(sorted(found[p]))[:60]))
+
+    # 시간표로 보이는 주소는 호출부 코드까지 보여준다. 어떤 파라미터를
+    # 함께 보내는지, GET 인지 POST 인지 여기서 드러난다.
+    key = ("timetable", "movietable", "schedule", "seatchoice", "play", "reserve")
+    out += ["", "=" * 60, "호출부 코드 (파라미터 확인용)", "=" * 60]
+    for p in hot:
+        if not any(k in p.lower() for k in key):
+            continue
+        for where, sn in ctx.get(p, [])[:2]:
+            out += ["", "[%s]  (%s)" % (p, where), "  " + sn]
 
     out += ["", "위 주소 중 상영시간표를 돌려주는 것을 찾으면,",
             "봇이 긁는 목록 대신 그쪽을 쓰도록 바꿀 수 있습니다."]
