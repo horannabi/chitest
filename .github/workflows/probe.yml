@@ -60,7 +60,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A probe.txt probe_seat.txt probe_endpoints.txt
+          # 이번에 돌린 진단의 결과 파일만 생긴다. 없는 것을 add 하면 실패하므로
+          # 있는 것만 담는다.
+          for f in probe.txt probe_seat.txt probe_endpoints.txt; do
+            if [ -f "$f" ]; then git add "$f"; fi
+          done
           git diff --staged --quiet || git commit -m "probe result"
           git pull --rebase --autostash
           git push
