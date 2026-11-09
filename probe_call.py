@@ -126,8 +126,8 @@ def summarize(name, method, url, data, r, why):
 
 def movie_codes(body):
     """
-    목록에서 (영화 제목, 영화 코드) 를 뽑는다.
-    팝업은 영화 코드를 함께 보내야 시간표를 돌려준다.
+    목록에서 (영화 제목, 영화 코드) 를 뽑는다. 더빙판/자막판처럼 같은 영화도
+    코드가 서로 다른 블록으로 따로 나오므로, 제목이 같아도 전부 모은다.
     """
     out = []
     for blk in body.split("each-movie-time")[1:]:
@@ -139,13 +139,15 @@ def movie_codes(body):
     return out
 
 
-def pick_movie(codes, keywords):
-    """감시 중인 키워드와 맞는 영화를 고른다. 없으면 첫 영화."""
-    for kw in keywords:
-        for title, code in codes:
-            if kw and kw in title:
-                return title, code
-    return codes[0] if codes else (None, None)
+def pick_movies(codes, keywords):
+    """
+    감시 중인 키워드와 맞는 (제목, 코드) 들을 전부 돌려준다 (더빙판/자막판 등
+    여러 블록이 있을 수 있어 전부 모은다). 하나도 안 맞으면 전체를 돌려준다 -
+    뭐라도 시도는 해봐야 한다.
+    """
+    hit = [(title, code) for title, code in codes
+           if any(kw and kw in title for kw in keywords)]
+    return hit or codes
 
 
 def fingerprint(body):
@@ -199,12 +201,33 @@ def main():
     # 팝업은 /Popup/Reserve 자체가 아니라, 그 안의 자바스크립트가 영화를 고른
     # 뒤에 /popup/ReserveScreenPlan 을 한 번 더 불러서 시간표를 채운다.
     # probe_popup_movie.html 에서 확인: loadScreenPlan() -> POST ReserveScreenPlan
+    #
+    # 같은 영화도 더빙판/자막판처럼 코드가 다른 블록으로 따로 나온다. 어느 코드가
+    # 맞는지 미리 알 수 없으므로, 후보를 전부 실제로 호출해 보고 시간표가 실제로
+    # 들어온(회차 ID 가 1개라도 있는) 첫 번째 것을 쓴다.
     keywords = [k.strip() for k in (os.environ.get("KEYWORDS") or "").split(",") if k.strip()]
+    out = ["probe_call %s" % datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
+           "극장 %s / 날짜 %s" % (theater, date)]
+    _write(out)                 # 이 시점부터는 중단돼도 뭐라도 남는다
+
     r0, why0 = call(sess, "POST", origin + "/Theater/MovieTable2",
                     {"TheaterCode": theater, "PlayDate": date})
     codes = movie_codes(r0.text or "") if r0 is not None else []
-    title, movie = pick_movie(codes, keywords)
-    print("목록에서 영화 %d편 확인. 고른 영화: %s" % (len(codes), title), flush=True)
+    candidates = pick_movies(codes, keywords)
+    print("목록에서 영화 %d편 확인. 후보 %d개: %s" %
+          (len(codes), len(candidates), ", ".join(t for t, _c in candidates[:5])), flush=True)
+
+    title, movie = None, None
+    for t, c in candidates:
+        rp, _why = call(sess, "POST", origin + "/popup/ReserveScreenPlan",
+                        {"theaterCode": theater, "playDate": date, "movieCode": c})
+        ok = rp is not None and PLAN_RE.search(rp.text or "")
+        print("  시도: %-30s code=%s -> %s" % (t, c, "성공" if ok else "빈 응답"), flush=True)
+        if ok:
+            title, movie = t, c
+            break
+    if not movie and candidates:
+        title, movie = candidates[0]        # 전부 실패해도 하나는 비교 대상으로 남긴다
 
     cases = [
         ("목록-시간대별", "POST", origin + "/Theater/TimeTable",
@@ -219,11 +242,9 @@ def main():
         cases.append(("봇이 긁는 주소", "GET", target.replace("{date}", date), None))
 
     start = datetime.now(KST)
-    out = ["probe_call %s" % start.strftime("%Y-%m-%d %H:%M:%S KST"),
-           "극장 %s / 날짜 %s" % (theater, date),
-           "%d초 동안 %d초 간격으로 지켜봅니다." % (watch_sec, step_sec),
-           "지금부터 좌석을 예매하거나 취소하면, 어느 주소가 먼저 반영하는지 보입니다.",
-           "고른 영화: %s (code=%s)" % (title, (movie or "")[:20] + "...")]
+    out += ["%d초 동안 %d초 간격으로 지켜봅니다." % (watch_sec, step_sec),
+            "지금부터 좌석을 예매하거나 취소하면, 어느 주소가 먼저 반영하는지 보입니다.",
+            "고른 영화: %s (code=%s)" % (title, movie)]
 
     # 먼저 한 번씩 불러 응답 생김새를 남긴다. 구조를 봐야 다음 판단을 할 수 있다.
     base = {}
@@ -234,6 +255,7 @@ def main():
             base[name] = fingerprint(r.text or "")
         print("%s -> %s" % (name, "실패(%s)" % why if r is None else r.status_code),
               flush=True)
+        _write(out)              # 매 호출마다 즉시 반영 - 중단돼도 여기까진 남는다
 
     if watch_sec <= 0:
         # 응답만 받아보려는 경우. 좌석을 움직일 필요가 없다.
@@ -242,6 +264,7 @@ def main():
         return 0
 
     out += ["", "=" * 64, "변화 기록", "=" * 64]
+    _write(out)
     print("기준값을 잡았습니다. 지금 좌석을 예매하거나 취소하세요.", flush=True)
 
     first_change = {}
@@ -249,6 +272,7 @@ def main():
     while (datetime.now(KST) - start).total_seconds() < watch_sec:
         time.sleep(step_sec)
         rounds += 1
+        changed_this_round = False
         for name, method, url, data in cases:
             r, _why = call(sess, method, url, data)
             if r is None:
@@ -265,6 +289,11 @@ def main():
                 print(line, flush=True)
                 base[name] = fp
                 first_change.setdefault(name, now)
+                changed_this_round = True
+        if changed_this_round:
+            _write(out)          # 변화가 잡힌 순간 바로 반영 - 중단해도 결과가 남는다
+        elif rounds % 6 == 0:
+            print("  (%d회째, 아직 변화 없음)" % rounds, flush=True)
 
     out += ["", "=" * 64, "요약 (%d회 확인)" % rounds, "=" * 64]
     if not first_change:
