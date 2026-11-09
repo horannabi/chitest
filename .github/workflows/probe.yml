@@ -75,6 +75,7 @@ jobs:
           PROBE_DATE: ${{ inputs.date }}
           PROBE_WATCH_SEC: ${{ inputs.watch_sec }}
           PROBE_STEP_SEC: "10"
+          KEYWORDS: ${{ secrets.KEYWORDS }}     # 감시 중인 영화로 팝업을 연다
 
       - name: 결과 커밋
         run: |

@@ -42,6 +42,8 @@ CHROME_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
              "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
 
 PLAN_RE = re.compile(r"""screenplanid['"]?\s*[:=]\s*['"]?(\d+)""", re.I)
+MOVIE_RE = re.compile(r"""data-moviecode=['"](\d+)['"]""", re.I)
+TITLE_RE = re.compile(r"""class=["']title["']>(.*?)</div>""", re.S | re.I)
 LEFT_RE = re.compile(r"(\d{1,3})\s*/\s*(\d{1,3})")
 SOLDOUT_RE = re.compile("매진")
 DUMP = 1600                     # 응답에서 떠볼 길이
@@ -122,6 +124,30 @@ def summarize(name, method, url, data, r, why):
     return out
 
 
+def movie_codes(body):
+    """
+    목록에서 (영화 제목, 영화 코드) 를 뽑는다.
+    팝업은 영화 코드를 함께 보내야 시간표를 돌려준다.
+    """
+    out = []
+    for blk in body.split("each-movie-time")[1:]:
+        t = TITLE_RE.search(blk)
+        title = re.sub(r"<[^>]+>", "", t.group(1)).strip() if t else "?"
+        m = MOVIE_RE.search(blk)
+        if m and (title, m.group(1)) not in out:
+            out.append((title, m.group(1)))
+    return out
+
+
+def pick_movie(codes, keywords):
+    """감시 중인 키워드와 맞는 영화를 고른다. 없으면 첫 영화."""
+    for kw in keywords:
+        for title, code in codes:
+            if kw and kw in title:
+                return title, code
+    return codes[0] if codes else (None, None)
+
+
 def fingerprint(body):
     """이 응답이 말하는 내용을 한 덩어리로 줄인다. 달라지면 갱신된 것이다."""
     plans = tuple(sorted(set(PLAN_RE.findall(body))))
@@ -170,14 +196,25 @@ def main():
     origin = "/".join(target.split("/")[:3]) if target else "https://www.cineq.co.kr"
     sess = make_session(origin)
 
+    # 팝업은 영화 코드가 있어야 시간표를 준다. 목록에서 먼저 얻어온다.
+    keywords = [k.strip() for k in (os.environ.get("KEYWORDS") or "").split(",") if k.strip()]
+    r0, why0 = call(sess, "POST", origin + "/Theater/MovieTable2",
+                    {"TheaterCode": theater, "PlayDate": date})
+    codes = movie_codes(r0.text or "") if r0 is not None else []
+    title, movie = pick_movie(codes, keywords)
+    print("목록에서 영화 %d편 확인. 고른 영화: %s" % (len(codes), title), flush=True)
+
     cases = [
-        ("예매 팝업", "POST", origin + "/Popup/Reserve",
-         {"theaterCode": theater, "playDate": date}),
         ("목록-시간대별", "POST", origin + "/Theater/TimeTable",
          {"TheaterCode": theater, "PlayDate": date}),
         ("목록-영화별", "POST", origin + "/Theater/MovieTable2",
          {"TheaterCode": theater, "PlayDate": date}),
     ]
+    if movie:
+        cases.insert(0, ("팝업(영화지정)", "POST", origin + "/Popup/Reserve",
+                         {"theaterCode": theater, "playDate": date, "movieCode": movie}))
+    cases.append(("팝업(영화없음)", "POST", origin + "/Popup/Reserve",
+                  {"theaterCode": theater, "playDate": date}))
     if target and "{date}" in target:
         cases.append(("봇이 긁는 주소", "GET", target.replace("{date}", date), None))
 
@@ -185,7 +222,8 @@ def main():
     out = ["probe_call %s" % start.strftime("%Y-%m-%d %H:%M:%S KST"),
            "극장 %s / 날짜 %s" % (theater, date),
            "%d초 동안 %d초 간격으로 지켜봅니다." % (watch_sec, step_sec),
-           "지금부터 좌석을 예매하거나 취소하면, 어느 주소가 먼저 반영하는지 보입니다."]
+           "지금부터 좌석을 예매하거나 취소하면, 어느 주소가 먼저 반영하는지 보입니다.",
+           "고른 영화: %s (code=%s)" % (title, (movie or "")[:20] + "...")]
 
     # 먼저 한 번씩 불러 응답 생김새를 남긴다. 구조를 봐야 다음 판단을 할 수 있다.
     base = {}
