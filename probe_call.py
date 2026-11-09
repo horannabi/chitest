@@ -217,17 +217,12 @@ def main():
     print("목록에서 영화 %d편 확인. 후보 %d개: %s" %
           (len(codes), len(candidates), ", ".join(t for t, _c in candidates[:5])), flush=True)
 
-    title, movie = None, None
-    for t, c in candidates:
-        rp, _why = call(sess, "POST", origin + "/popup/ReserveScreenPlan",
-                        {"theaterCode": theater, "playDate": date, "movieCode": c})
-        ok = rp is not None and PLAN_RE.search(rp.text or "")
-        print("  시도: %-30s code=%s -> %s" % (t, c, "성공" if ok else "빈 응답"), flush=True)
-        if ok:
-            title, movie = t, c
-            break
-    if not movie and candidates:
-        title, movie = candidates[0]        # 전부 실패해도 하나는 비교 대상으로 남긴다
+    # loadScreenPlan(movieCodeList) 가 movieCodeList.toString() 으로 보낸다.
+    # 자바스크립트 배열의 toString() 은 쉼표로 이어 붙이므로, 체크된 영화(더빙판/
+    # 자막판 전부)를 한 번에 쉼표로 묶어 보내는 것이 맞다. 하나씩 따로 보내면
+    # (앞서 그렇게 했다가 실패했다) 서로 다른 버전이라 빈 응답이 날 수 있다.
+    title = ", ".join(t for t, _c in candidates) if candidates else None
+    movie = ",".join(c for _t, c in candidates) if candidates else None
 
     cases = [
         ("목록-시간대별", "POST", origin + "/Theater/TimeTable",
