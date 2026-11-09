@@ -232,8 +232,20 @@ def main():
         out += summarize(name, method, url, data, r, why)
         if r is not None:
             base[name] = fingerprint(r.text or "")
+            # 팝업 응답은 통째로 남긴다. 영화를 지정해도 시간표가 안 와서,
+            # 어떻게 채우는지 원문을 봐야 한다.
+            if "Popup/Reserve" in url:
+                tag = "movie" if (data or {}).get("movieCode") else "plain"
+                with open("probe_popup_%s.html" % tag, "w", encoding="utf-8") as f:
+                    f.write(r.text or "")
         print("%s -> %s" % (name, "실패(%s)" % why if r is None else r.status_code),
               flush=True)
+
+    if watch_sec <= 0:
+        # 응답만 받아보려는 경우. 좌석을 움직일 필요가 없다.
+        out += ["", "=" * 64, "지켜보기 없이 응답만 받았습니다.", "=" * 64]
+        _write(out)
+        return 0
 
     out += ["", "=" * 64, "변화 기록", "=" * 64]
     print("기준값을 잡았습니다. 지금 좌석을 예매하거나 취소하세요.", flush=True)
@@ -277,10 +289,13 @@ def main():
         out += ["", "가장 먼저 바뀐 주소가 가장 빠른 소스입니다.",
                 "봇이 긁는 주소가 뒤쪽이라면 앞쪽으로 바꾸면 됩니다."]
 
-    text = "\n".join(out) + "\n"
-    with open("probe_call.txt", "w", encoding="utf-8") as f:
-        f.write(text)
+    _write(out)
     return 0
+
+
+def _write(lines):
+    with open("probe_call.txt", "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":
