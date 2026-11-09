@@ -8,9 +8,13 @@ on:
         required: true
         default: seat
         type: choice
-        options: [seat, reach]
+        options: [seat, reach, endpoints]
       date:
         description: "날짜 (20261107). seat 진단에만 사용"
+        required: false
+        type: string
+      page_url:
+        description: "조사할 페이지 주소. endpoints 진단에만 사용"
         required: false
         type: string
 
@@ -45,11 +49,18 @@ jobs:
           TARGET_URL: ${{ secrets.TARGET_URL }}
           PROBE_DATE: ${{ inputs.date }}
 
+      - name: 엔드포인트 탐색
+        if: inputs.kind == 'endpoints'
+        run: python probe_endpoints.py
+        env:
+          # 입력이 비어 있으면 감시 대상 주소를 그대로 쓴다
+          PROBE_PAGE_URL: ${{ inputs.page_url || secrets.SITE_URL }}
+
       - name: 결과 커밋
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A probe.txt probe_seat.txt
+          git add -A probe.txt probe_seat.txt probe_endpoints.txt
           git diff --staged --quiet || git commit -m "probe result"
           git pull --rebase --autostash
           git push
