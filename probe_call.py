@@ -184,13 +184,24 @@ def fingerprint(body):
 
 
 def seat_near(body, plan_id):
-    """회차 ID 주변에서 잔여석 표시를 찾는다. 소스마다 표기 형식이 다르다."""
+    """
+    회차 ID 주변에서 잔여석 표시를 찾는다. 소스마다 표기 형식이 다르다.
+
+    글자 수를 정해서 자르면, 조조/더빙처럼 뱃지가 여러 개 겹친 회차에서
+    또 잘릴 수 있다(실측: 조조 아이콘 하나만으로 500자를 썼다. 몇 개가
+    더 겹칠지는 알 수 없다). 대신 "다음 회차 ID가 나오기 직전까지" 를
+    범위로 삼는다 - 뱃지가 몇 개든 같은 회차 블록 안에 있는 한 안전하다.
+    """
     idx = body.find('screenplanid="%s"' % plan_id)
     if idx == -1:
         idx = body.find("screenplanid='%s'" % plan_id)
     if idx == -1:
         return "(이 회차 없음)"
-    window = body[idx:idx + 500]
+    nxt = body.find('screenplanid="', idx + 1)
+    if nxt == -1:
+        nxt = body.find("screenplanid='", idx + 1)
+    # 이 회차가 문서의 마지막이면 다음 경계가 없다. 무한정 읽지 않게 상한만 둔다.
+    window = body[idx:nxt] if nxt != -1 else body[idx:idx + 3000]
     if "매진" in window:
         return "매진"
     # 실측 응답에는 숫자 사이에 태그가 낀 경우가 있다:
