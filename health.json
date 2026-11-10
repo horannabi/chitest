@@ -3,17 +3,17 @@
   "run_id": "42903997317",
   "run_event": "schedule",
   "started": "2026-11-11 06:20:27",
-  "last_seen": "2026-11-11 08:19:38",
-  "checks": 672,
+  "last_seen": "2026-11-11 08:20:39",
+  "checks": 678,
   "gap_at_start_sec": 14,
   "prev_run": "42901593610",
   "relay": {
-    "requested_at": null,
-    "ok": null,
-    "tries": 0
+    "requested_at": "2026-11-11 08:20:34",
+    "ok": true,
+    "tries": 1
   },
   "error_count": 0,
   "last_error": null,
   "stage": "다음 조회 대기",
-  "stage_idle_sec": 6
+  "stage_idle_sec": 2
 }
