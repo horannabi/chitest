@@ -3,7 +3,7 @@
   "tg_offset": 246732890,
   "seatwatch": true,
   "health_off": false,
-  "announced": null,
+  "announced": "20261113",
   "zero_slots": [],
   "slot_ids": {
     "극장판 치이카와: 인어 섬의 비밀 (더빙)|8 관|10:10~11:56": "1112658",
@@ -58,8 +58,8 @@
   },
   "id_since": "2026-11-05 09:39",
   "id_anomalies": 540,
-  "ack_date": null,
-  "ack_count": 0,
+  "ack_date": "20261113",
+  "ack_count": 1,
   "trace_until": null,
-  "updated_at": "2026-11-11 00:48:45 KST"
+  "updated_at": "2026-11-11 00:48:47 KST"
 }
