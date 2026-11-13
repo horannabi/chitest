@@ -653,19 +653,20 @@ def snapshot(cfg, fetcher, target, show_all=False):
 
     items = parse(body, fmt)
     ymd = target.strftime("%Y%m%d")
+    wday = WDAY[target.weekday()]
 
     if show_all:
-        head = "날짜 %s / 전체 %d개" % (ymd, len(items))
+        head = "날짜 %s (%s) / 전체 %d개" % (ymd, wday, len(items))
         if not items:
             return head + "\n아직 목록이 올라오지 않았습니다."
         return "\n".join([head, ""] + format_items(items))
 
     hits = match_keywords(items, cfg.keywords)
     if not hits:
-        return ("날짜 %s\n아직 없습니다. (그날 전체 %d개)\n전체를 보려면 /nowall"
-                % (ymd, len(items)))
+        return ("날짜 %s (%s)\n아직 없습니다. (그날 전체 %d개)\n전체를 보려면 /nowall"
+                % (ymd, wday, len(items)))
     check_seats(cfg, fetcher, hits)          # 매진/소수 잔여 회차는 좌석까지 확인
-    return "\n".join(["날짜 %s / %d건" % (ymd, len(hits)), ""] + format_items(hits))
+    return "\n".join(["날짜 %s (%s) / %d건" % (ymd, wday, len(hits)), ""] + format_items(hits))
 
 
 def raise_alert(cfg, state, tg, text):
