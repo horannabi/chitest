@@ -3,8 +3,8 @@
   "run_id": "43735246666",
   "run_event": "schedule",
   "started": "2026-11-16 01:24:15",
-  "last_seen": "2026-11-16 03:15:07",
-  "checks": 292,
+  "last_seen": "2026-11-16 03:16:09",
+  "checks": 295,
   "gap_at_start_sec": 8,
   "prev_run": "43726244940",
   "relay": {
@@ -15,5 +15,5 @@
   "error_count": 0,
   "last_error": null,
   "stage": "텔레그램 명령",
-  "stage_idle_sec": 2
+  "stage_idle_sec": 0
 }
