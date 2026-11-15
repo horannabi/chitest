@@ -3,8 +3,8 @@
   "run_id": "43688409499",
   "run_event": "workflow_dispatch",
   "started": "2026-11-15 16:06:26",
-  "last_seen": "2026-11-15 17:13:13",
-  "checks": 380,
+  "last_seen": "2026-11-15 17:14:15",
+  "checks": 386,
   "gap_at_start_sec": 8,
   "prev_run": "43679564221",
   "relay": {
