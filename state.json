@@ -6,7 +6,6 @@
   "announced": "20261118",
   "zero_slots": [
     "id:1114680",
-    "id:1114681",
     "id:1114722"
   ],
   "slot_ids": {
@@ -74,5 +73,5 @@
   "ack_date": "20261118",
   "ack_count": 1,
   "trace_until": null,
-  "updated_at": "2026-11-16 08:04:05 KST"
+  "updated_at": "2026-11-16 08:04:53 KST"
 }
