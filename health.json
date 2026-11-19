@@ -3,8 +3,8 @@
   "run_id": "44607450892",
   "run_event": "workflow_dispatch",
   "started": "2026-11-20 05:19:42",
-  "last_seen": "2026-11-20 06:50:18",
-  "checks": 242,
+  "last_seen": "2026-11-20 06:51:19",
+  "checks": 245,
   "gap_at_start_sec": 12,
   "prev_run": "44586412960",
   "relay": {
@@ -14,6 +14,6 @@
   },
   "error_count": 0,
   "last_error": null,
-  "stage": "알림 재전송",
-  "stage_idle_sec": 5
+  "stage": "텔레그램 명령",
+  "stage_idle_sec": 3
 }
