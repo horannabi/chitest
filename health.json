@@ -3,8 +3,8 @@
   "run_id": "44607450892",
   "run_event": "workflow_dispatch",
   "started": "2026-11-20 05:19:42",
-  "last_seen": "2026-11-20 07:16:56",
-  "checks": 314,
+  "last_seen": "2026-11-20 07:17:57",
+  "checks": 317,
   "gap_at_start_sec": 12,
   "prev_run": "44586412960",
   "relay": {
@@ -15,5 +15,5 @@
   "error_count": 0,
   "last_error": null,
   "stage": "다음 조회 대기",
-  "stage_idle_sec": 5
+  "stage_idle_sec": 0
 }
