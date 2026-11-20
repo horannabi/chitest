@@ -3,8 +3,8 @@
   "run_id": "44727951416",
   "run_event": "schedule",
   "started": "2026-11-20 20:29:19",
-  "last_seen": "2026-11-20 20:57:03",
-  "checks": 73,
+  "last_seen": "2026-11-20 20:58:04",
+  "checks": 76,
   "gap_at_start_sec": 10,
   "prev_run": "44718698457",
   "relay": {
