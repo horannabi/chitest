@@ -4,7 +4,9 @@
   "seatwatch": true,
   "health_off": false,
   "announced": "20261121",
-  "zero_slots": [],
+  "zero_slots": [
+    "id:1115570"
+  ],
   "slot_ids": {
     "극장판 치이카와: 인어 섬의 비밀 (더빙)|10 관|12:25~14:11": "1115578",
     "극장판 치이카와: 인어 섬의 비밀 (더빙)|10 관|16:45~18:31": "1115579",
@@ -69,7 +71,7 @@
   "id_since": "2026-11-05 09:39",
   "id_anomalies": 540,
   "ack_date": "20261121",
-  "ack_count": 1,
+  "ack_count": 2,
   "trace_until": null,
-  "updated_at": "2026-11-21 10:59:11 KST"
+  "updated_at": "2026-11-21 10:59:35 KST"
 }
