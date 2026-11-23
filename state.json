@@ -7,6 +7,7 @@
   "zero_slots": [
     "id:1117270",
     "id:1117300",
+    "id:1117301",
     "id:1117302",
     "id:1117303",
     "id:1117305",
@@ -82,5 +83,5 @@
   "ack_date": null,
   "ack_count": 0,
   "trace_until": null,
-  "updated_at": "2026-11-24 05:01:25 KST"
+  "updated_at": "2026-11-24 05:01:31 KST"
 }
