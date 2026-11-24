@@ -3,17 +3,17 @@
   "run_id": "45364349924",
   "run_event": "workflow_dispatch",
   "started": "2026-11-24 18:21:27",
-  "last_seen": "2026-11-24 20:20:39",
-  "checks": 671,
+  "last_seen": "2026-11-24 20:21:41",
+  "checks": 677,
   "gap_at_start_sec": 10,
   "prev_run": "45347254616",
   "relay": {
-    "requested_at": null,
-    "ok": null,
-    "tries": 0
+    "requested_at": "2026-11-24 20:21:35",
+    "ok": true,
+    "tries": 1
   },
   "error_count": 0,
   "last_error": null,
   "stage": "다음 조회 대기",
-  "stage_idle_sec": 6
+  "stage_idle_sec": 1
 }
