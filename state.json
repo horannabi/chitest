@@ -5,11 +5,14 @@
   "health_off": false,
   "announced": null,
   "zero_slots": [],
-  "slot_ids": {},
+  "slot_ids": {
+    "레이 건|(RESERVE)3 관|10:30~12:37": "1118233",
+    "레이 건|(RESERVE)3 관|15:20~17:27": "1118235"
+  },
   "id_since": "2026-11-05 09:39",
   "id_anomalies": 540,
   "ack_date": null,
   "ack_count": 0,
   "trace_until": null,
-  "updated_at": "2026-11-27 16:42:15 KST"
+  "updated_at": "2026-11-27 16:42:16 KST"
 }
